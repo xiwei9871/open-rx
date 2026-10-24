@@ -46,3 +46,57 @@ jobs:
         run: |
           set -e
           ! git ls-files | grep -iE '\.(stl|dcm|dicom)$' || { echo "banned file type committed"; exit 1; }
+
+  api-tests:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: easyrs_admin
+          POSTGRES_PASSWORD: ci_admin_pw
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U easyrs_admin -d postgres"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psql client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Create least-privilege runtime role (mirrors infra/postgres/init)
+        run: |
+          psql "postgresql://easyrs_admin:ci_admin_pw@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE easyrs_app LOGIN PASSWORD 'ci_app_pw';
+          SQL
+
+      - name: Install API deps
+        run: pip install -r apps/api/requirements.txt
+
+      - name: Alembic migrate + pytest (migration/auth/isolation/rbac/contract)
+        env:
+          TEST_PG_HOST: localhost
+          TEST_PG_PORT: "5432"
+          POSTGRES_ADMIN_PASSWORD: ci_admin_pw
+          POSTGRES_APP_PASSWORD: ci_app_pw
+          SECRET_KEY: ci-not-a-real-secret
+        run: cd apps/api && python -m pytest -q
+
+  web-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Frontend typecheck + build
+        run: cd apps/web && npm ci --no-audit --no-fund && npm run build

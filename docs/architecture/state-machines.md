@@ -106,7 +106,7 @@ stateDiagram-v2
   assigned --> printing : job started
   printing --> printed : confirmed complete
   printing --> failed : print failure → requeue? ~
-  printed --> downloaded : file retrieved by operator (AI-016语义核对~)
+  printed --> downloaded : file retrieved by operator (顺序 ? UNKNOWN，见§9 — 不实施强制迁移)
   downloaded --> [*]
   queued --> cancelled
 ```
@@ -188,7 +188,7 @@ stateDiagram-v2
 - Rx：运输中取消的费用归属；lab 编辑后医生再批准；cancelled 可否重开。
 - 加工：QC fail 自动重试上限；approved 是否必须人工。
 - 生产：并行工序依赖；外包状态回传；remake 后原单状态。
-- 打印：printed↔downloaded 官方语义顺序（AI-016 只证明三标记存在）。
+- 打印：printed↔downloaded 官方语义顺序（AI-016 只证明三标记存在）——B0-01 确认：**保持 UNKNOWN，实现层不得强制 `printed→downloaded` 为唯一迁移**，允许操作者独立记录 downloaded。
 - 套餐差异：哪些 lab 套餐跳过 completed（GAP-07）。
 
 实现约束：上述 `?` 迁移必须表现为**可配置工作流 + 默认拒绝**，并附 `PROVISIONAL` 注释链回本文件。

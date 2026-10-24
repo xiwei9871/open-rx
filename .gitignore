@@ -34,3 +34,4 @@ data/exports/
 coverage/
 .pytest_cache/
 out/
+.env

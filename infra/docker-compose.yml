@@ -1,0 +1,76 @@
+name: easyrs-dev
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: easyrs_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-dev_admin_pw_change_me}
+      POSTGRES_DB: easyrs
+    # 55432 (not 5432): dev machines may run a local Postgres/ssh tunnel on 5432
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easyrs_admin -d easyrs"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible object store. MinIO images are unavailable on reachable
+  # registries in this environment; RustFS provides the same S3 API surface
+  # (boto3-compatible, used for bucket provisioning only at B0).
+  minio:
+    image: rustfs/rustfs:latest
+    command: rustfs /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER:-easyrs_dev}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_minio_pw_change_me}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  api:
+    build:
+      context: ../apps/api
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://easyrs_app:${POSTGRES_APP_PASSWORD:-dev_app_pw_change_me}@postgres:5432/easyrs
+      DATABASE_ADMIN_URL: postgresql+asyncpg://easyrs_admin:${POSTGRES_ADMIN_PASSWORD:-dev_admin_pw_change_me}@postgres:5432/easyrs
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-easyrs_dev}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_minio_pw_change_me}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_started}
+
+  web:
+    build:
+      context: ../apps/web
+    ports:
+      - "5173:80"   # nginx serves the built SPA on :80 inside the container
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  miniodata:

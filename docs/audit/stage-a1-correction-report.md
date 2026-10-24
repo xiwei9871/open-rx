@@ -34,7 +34,7 @@
 - 三层边界：RLS(tenant) → org_connection(能力) → 对象授权(Rx/file_reference/grant)
 - 撤销语义（PROVISIONAL，V-14 待校）：禁新提交、在途单继续、grant/reference 即时失效
 - ID 枚举防护：跨权一律 403 同构响应，无存在性 oracle + 限速告警
-- 新增 `authz-test-matrix.md`：36 条用例覆盖正常/未授权/撤销/枚举四类（AZ-01~36）
+- 新增 `authz-test-matrix.md`：22 条用例覆盖正常/未授权/撤销/枚举四类（AZ-01~36，编号非连续）
 
 ## 4. A4 — MVP API 契约（完成）
 
@@ -59,7 +59,7 @@
 
 ## 6. A6 — V1.1 交接（完成）
 
-`docs/research/v1.1-verification-checklist.md`：14 项风险排序任务（🔴6/🟡6/🟢2）——Create Rx 全流程、Check-in/Unsubmit/Completed 精确条件、三角权限差、Templates/Parts/Appliance 字段、3D Profiles、导出迁移、**剩余 33 源逐一过堂**、撤销语义。每项含方法（doc-read/ui-observe/api-observe）、判定标准、失败影响。
+`docs/research/v1.1-verification-checklist.md`：14 项风险排序任务（🔴5/🟡6/🟢3）——Create Rx 全流程、Check-in/Unsubmit/Completed 精确条件、三角权限差、Templates/Parts/Appliance 字段、3D Profiles、导出迁移、**剩余 33 源逐一过堂**、撤销语义。每项含方法（doc-read/ui-observe/api-observe）、判定标准、失败影响。
 
 ## 7. 验证结果
 

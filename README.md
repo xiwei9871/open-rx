@@ -32,6 +32,23 @@ python3 tools/gen_backlog.py --check # 生成物与源数据漂移检查
 npx @redocly/cli lint docs/api/openapi.yaml  # API 契约 lint
 ```
 
+## 本地运行（Stage B0 工程地基）
+
+```bash
+cp .env.example .env                  # 开发默认值，无真实密钥
+docker compose -f infra/docker-compose.yml up -d --build
+# web: http://localhost:5173  (nginx → /api/* 反代到 api:8000)
+# api: http://localhost:8000  (启动时自动 alembic upgrade + 合成数据 seed)
+```
+
+合成登录：`admin@pa.dev` / `Passw0rd!dev`（practice_admin），另有 `doctor@pa.dev`、
+`staff@pa.dev`、`admin@la.dev`、`tech@la.dev` 同密码。仅合成数据，禁止真实患者信息。
+
+本地后端开发（不经容器）：Python 3.11+，`cd apps/api && pip install -r requirements.txt
+&& ENV=dev uvicorn app.main:app --port 8000`；测试 `python -m pytest -q`（需要 compose
+的 postgres 在 55432）。前端开发：`cd apps/web && npm ci && npm run dev`（vite 把
+`/api/*` 代理到 localhost:8000）。
+
 ## 关键数字（研究基线，非完成度）
 
 167 功能项 · 12 模块 · 12 Epic · 51 Task · MVP 候选 72→再审保留 55 项核心 · 20 项未决差距登记在册
