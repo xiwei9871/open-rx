@@ -74,7 +74,8 @@ GET  http://localhost:8000/healthz              → 200 {"status":"ok"}
 | `api-tests` | postgres:16 service → 建 `easyrs_app` 最小权限角色 → pytest 25 项（与本地同） |
 | `web-build` | `npm ci` + `tsc --noEmit` + `vite build` |
 
-远端 CI 结果：见提交说明（推送后由 GitHub Actions 记录，本报告提交时如实更新/附 run 状态）。
+远端 CI 结果（API 实测，commit `10c5113c`）：run [40089790855](https://github.com/xiwei9871/open-rx/actions/runs/40089790855)
+`validate` ✅ · `api-tests` ✅（pg service + 25 pytest）· `web-build` ✅ — 全 success。
 
 ## 7. 关键设计决定（审计留痕）
 
