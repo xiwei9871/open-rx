@@ -1,0 +1,36 @@
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / frontend (future)
+node_modules/
+dist/
+*.log
+
+# Env & secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Data — PHI/样本/大文件不入仓
+*.stl
+*.STL
+data/samples/
+data/exports/
+*.zip
+
+# Build/test
+coverage/
+.pytest_cache/
+out/

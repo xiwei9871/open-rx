@@ -1,0 +1,6 @@
+EasyRx V1.0 研究交付（2026-10-24）
+主报告: EasyRx_开源替代系统_功能总清单与差距分析_V1.0.md
+逐项功能: easyrx_feature_inventory_v1.csv (167行)
+来源目录: easyrx_source_index_v1.csv (37个索引)
+机器可读: easyrx_inventory_v1.json
+注意: 本交付不包含病人截图、病人资料及STL。

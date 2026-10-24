@@ -1,0 +1,39 @@
+name: baseline-validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Baseline + traceability validation
+        run: python3 tools/validate_baseline.py
+
+      - name: Generated backlog drift check
+        run: python3 tools/gen_backlog.py --check
+
+      - name: OpenAPI lint
+        run: npx -y @redocly/cli@latest lint docs/api/openapi.yaml --max-problems 400
+
+      - name: Secret scan (tracked files)
+        run: |
+          set -e
+          ! grep -rInE '(api[_-]?key|password|secret)[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9_\-]{16,}' \
+            --exclude-dir=.git . || { echo "possible secret committed"; exit 1; }
+
+      - name: PHI / banned file types
+        run: |
+          set -e
+          ! git ls-files | grep -iE '\.(stl|dcm|dicom)$' || { echo "banned file type committed"; exit 1; }
