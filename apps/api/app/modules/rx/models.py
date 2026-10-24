@@ -77,6 +77,9 @@ class Rx(Base, IdMixin, CreatedAtMixin):
         DateTime(timezone=True), nullable=True)
     signature_name: Mapped[str | None] = mapped_column(String(200),
                                                        nullable=True)
+    # exact version the submit signature binds (persisted — Final Gate F1)
+    signed_rx_version: Mapped[int | None] = mapped_column(Integer,
+                                                        nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     # Submit idempotency: (key, payload-hash) pair; replay -> first result,
     # same key + different payload -> 409 (contract x-idempotent).
@@ -133,6 +136,10 @@ class RxBundle(Base, IdMixin, CreatedAtMixin):
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("user_account.id"))
     rx_version: Mapped[int] = mapped_column(Integer)
+    # sha256 over the deliverable content (fields + items + live refs);
+    # reuse requires an exact match — status-only bumps never invalidate.
+    content_fingerprint: Mapped[str] = mapped_column(
+        String(64), default="", server_default="")
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)
     sha256: Mapped[str] = mapped_column(String(64))
     bytes: Mapped[int] = mapped_column(BigInteger)

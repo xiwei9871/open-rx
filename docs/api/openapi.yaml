@@ -1434,6 +1434,7 @@ components:
         doctor_id: {type: [string, "null"], format: uuid}
         checked_in_via: {type: [string, "null"], enum: [button, download], readOnly: true, description: "which check-in path fired (SRC03: download IS a check-in)"}
         signature_name: {type: [string, "null"], description: "typed e-signature captured at submit"}
+        signed_rx_version: {type: [integer, "null"], readOnly: true, description: "exact Rx version the signature binds (persisted at submit)"}
         items: {type: array, items: {$ref: "#/components/schemas/RxItem"}, readOnly: true, description: "present on getRx/create/submit responses"}
         version: {type: integer, readOnly: true}
         submitted_at: {type: [string, "null"], format: date-time, readOnly: true}

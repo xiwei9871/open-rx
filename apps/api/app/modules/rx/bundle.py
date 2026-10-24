@@ -26,8 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.modules.assets.models import Asset, FileReference
-from app.modules.rx.models import Rx
-from app.pdfgen import simple_pdf
+from app.modules.clinical.models import Patient
+from app.modules.iam.models import Organization, RosterMember
+from app.modules.rx.models import CatalogItem, Rx, RxItem
+from app.pdfgen import prescription_pdf
 from app.storage import s3
 
 
@@ -83,19 +85,114 @@ async def _write_verified(zf: zipfile.ZipFile, entry: str, key: str,
     await asyncio.to_thread(work)
 
 
-async def build_bundle(db: AsyncSession, rx: Rx) -> tuple[str, str, int, dict]:
-    """Build the ZIP on disk.
-
-    Returns (temp_path, zip_sha256, zip_bytes, manifest_dict).
-    The caller owns the temp file and must unlink it.
-    """
-    refs = (await db.execute(
+async def _refs(db: AsyncSession, rx: Rx):
+    return (await db.execute(
         select(FileReference, Asset)
         .join(Asset, Asset.id == FileReference.asset_id)
         .where(FileReference.subject_type == "rx",
                FileReference.subject_id == rx.id,
                FileReference.revoked_at.is_(None))
         .order_by(FileReference.created_at))).all()
+
+
+async def _items(db: AsyncSession, rx: Rx):
+    return (await db.execute(
+        select(RxItem, CatalogItem)
+        .join(CatalogItem, CatalogItem.id == RxItem.catalog_item_id)
+        .where(RxItem.rx_id == rx.id)
+        .order_by(RxItem.created_at))).all()
+
+
+async def content_fingerprint(db: AsyncSession, rx: Rx) -> str:
+    """sha256 over everything the delivered package depends on: Rx content
+    fields, the item configuration, and the live file-reference set.
+    Status/version are deliberately excluded — a check-in never changes
+    what the package contains, an attachment/item edit always does."""
+    items = await _items(db, rx)
+    refs = await _refs(db, rx)
+    payload = {
+        "patient_id": str(rx.patient_id),
+        "case_id": str(rx.case_id or ""),
+        "lab_org_id": str(rx.lab_org_id or ""),
+        "location_id": str(rx.location_id or ""),
+        "doctor_id": str(rx.doctor_id or ""),
+        "form_type": rx.form_type,
+        "form_payload": rx.form_payload,
+        "due_date": rx.due_date.isoformat() if rx.due_date else "",
+        "notes": rx.notes or "",
+        "items": [{"catalog_item_id": str(i.catalog_item_id),
+                   "arch": i.arch, "tooth_ops": i.tooth_ops,
+                   "options": i.options, "qty": i.qty}
+                  for i, _ in items],
+        "refs": sorted(f"{r.asset_id}:{r.role}" for r, _ in refs),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, default=str).encode()
+    ).hexdigest()
+
+
+def _item_line(item: RxItem, cat: CatalogItem) -> str:
+    parts = [f"{cat.code} {cat.name}", f"arch={item.arch}"]
+    if item.qty != 1:
+        parts.append(f"qty={item.qty}")
+    if item.tooth_ops:
+        ops = ", ".join(f"{o.get('tooth')}:{o.get('op')}"
+                        for o in item.tooth_ops)
+        parts.append(f"teeth[{ops}]")
+    if item.options:
+        parts.append("options=" + json.dumps(item.options,
+                                             ensure_ascii=False,
+                                             sort_keys=True))
+    return " — ".join(parts)
+
+
+async def _prescription_pdf(db: AsyncSession, rx: Rx,
+                            manifest_files: list[dict]) -> bytes:
+    patient = await db.get(Patient, rx.patient_id)
+    practice = await db.get(Organization, rx.practice_org_id)
+    lab = await db.get(Organization, rx.lab_org_id) if rx.lab_org_id else None
+    doctor = await db.get(RosterMember, rx.doctor_id) if rx.doctor_id else None
+    items = await _items(db, rx)
+    pat = (f"{patient.last_name}, {patient.first_name}"
+           if patient else str(rx.patient_id))
+    pat += (f" (ref {patient.external_ref})"
+            if patient and patient.external_ref else "")
+    item_lines = [_item_line(i, c) for i, c in items] or ["(none)"]
+    attach_lines = [
+        f"{f['entry']}  {f['kind']}/{f.get('jaw') or '-'}  "
+        f"{f['bytes']} B  sha256:{f['sha256'][:16]}…"
+        for f in manifest_files] or ["(none)"]
+    sections = [
+        ("Parties", [
+            f"Patient: {pat}",
+            f"Practice: {practice.name if practice else rx.practice_org_id}",
+            f"Prescriber: {doctor.display_name if doctor else '-'}",
+            f"Laboratory: {lab.name if lab else '-'}",
+        ]),
+        ("Order", [
+            f"Rx number: {rx.rx_number}",
+            f"Status: {rx.status}",
+            f"Due date: {rx.due_date or '-'}",
+            f"Submitted (UTC): "
+            f"{rx.submitted_at.isoformat() if rx.submitted_at else '-'}",
+            f"Signed by: {rx.signature_name or '-'}",
+        ]),
+        ("Items", item_lines),
+        ("Instructions", [rx.notes or "(none)"]),
+        ("Attachments", attach_lines),
+    ]
+    return prescription_pdf(f"Prescription {rx.rx_number}", sections,
+                            "Generated by EasyRS — synthetic development "
+                            "document, not a real clinical prescription")
+
+
+async def build_bundle(db: AsyncSession, rx: Rx) -> tuple[str, str, int, dict]:
+    """Build the ZIP on disk.
+
+    Returns (temp_path, zip_sha256, zip_bytes, manifest_dict).
+    The caller owns the temp file and must unlink it.
+    """
+    refs = await _refs(db, rx)
 
     manifest_files = []
     for idx, (ref, asset) in enumerate(refs, start=1):
@@ -111,17 +208,7 @@ async def build_bundle(db: AsyncSession, rx: Rx) -> tuple[str, str, int, dict]:
         "generated_at": datetime.now(UTC).isoformat(),
         "files": manifest_files,
     }
-    pdf = simple_pdf(f"Prescription {rx.rx_number}", [
-        ("Status", rx.status),
-        ("Practice org", str(rx.practice_org_id)),
-        ("Lab org", str(rx.lab_org_id or "-")),
-        ("Due date", str(rx.due_date or "-")),
-        ("Submitted", str(rx.submitted_at or "-")),
-        ("Signature", rx.signature_name or "-"),
-        ("Items", str(len(rx.__dict__.get("_items", []) or []))),
-        ("Attachments", str(len(manifest_files))),
-        ("Generated by", "EasyRS (synthetic dev document)"),
-    ])
+    pdf = await _prescription_pdf(db, rx, manifest_files)
 
     fd, path = tempfile.mkstemp(prefix="rxb-", suffix=".zip")
     try:

@@ -307,6 +307,7 @@ const RxSchema = z.object({
   doctor_id: z.string().nullable(),
   checked_in_via: z.string().nullable(),
   signature_name: z.string().nullable(),
+  signed_rx_version: z.number().nullable(),
   version: z.number(),
   submitted_at: z.string().nullable(),
   checked_in_at: z.string().nullable(),

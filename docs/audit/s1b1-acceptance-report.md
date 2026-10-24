@@ -1,6 +1,6 @@
 # S1b.1 验收报告 — Rx 交付包、签署与并发安全
 
-日期：2026-01-12 · 分支：`devin/easyrs-stage-s1b` · 基线：`c847cc5`（S1b-Core）
+日期：2026-10-24（Final Gate 修订）· 分支：`devin/easyrs-stage-s1b` · 基线：`c847cc5`（S1b-Core）
 范围：S1b1-01 ~ S1b1-05 定向修复；未扩展模板/审批/生产/AI/财务。
 
 ## 判定：**PASS（局部待远端 CI 确认）**
@@ -13,7 +13,7 @@
 
 ```
 RX{n}.zip
-├── prescription.pdf   # EasyRS 自生成极简 PDF（自写生成器，无外部依赖）
+├── prescription.pdf   # reportlab 生成；患者/双方/医生/到期日/部件明细/备注/签署/附件
 ├── manifest.json      # 每条文件：entry/文件名、asset_id、kind、jaw、role、bytes、sha256
 └── attachments/<jaw|attachment>-NN.<ext>   # 实际字节，逐条 S3 读取
 ```
@@ -35,18 +35,22 @@ RX{n}.zip
   GET 天然只读。预取/重放不再触发接单。
 - 打包失败 → 502/4xx，Rx 保持 `submitted`（测试
   `test_bundle_missing_object_aborts_without_checkin`）。
-- 重复下载复用 ready bundle（`rx_version >= rx.version - 1`，覆盖
-  Check-in 自身的 +1 bump）；不重复产生包与 transition。
+- 重复下载按 `content_fingerprint`（内容字段+部件配置+有效引用集合
+  的 sha256）复用 ready bundle；状态 bump 不失效、内容变更必重建
+  （Final Gate F2 修复：`rx_version >= version-1` 启发式已移除）。
 - 诊所自下载永不 Check-in（`checked_in_via` 仅目标实验室置位）。
 - ADR：`docs/architecture/adr/0008-rx-bundle-download-checkin.md`
   明确"下载=服务端成功备包并接受明确下载动作"，不虚构物理收齐。
 
 ## S1b1-03 服务端签署 Gate
 
-`RxSubmit.signature_name` 必填 + `confirm_submit` 必须为 true，先验签
-再做任何状态工作；提交记录 `signature_name/signature_user_id/
-signature_at/signed_version`；transition note 携带签署者+版本；
-重复提交（状态已变）返回 `already_submitted`，不产生第二条签署记录。
+`RxSubmit.signature_name` 必填 + `confirm_submit` 为**必填字段**
+（无默认值，缺省 422——Final Gate F1），先验签再做任何状态工作。
+实际持久化的签署事实（Final Gate 核对，不夸大）：`rx.signature_name`、
+`rx.submitted_by_user_id`、`rx.submitted_at`（UTC timestamptz）、
+`rx.signed_rx_version`（迁移 0008 新增列）；transition 行记录
+`draft→submitted`；审计事件携带 `after_hash`。重复提交返回
+`already_submitted`，不产生第二条签署记录。
 
 ## S1b1-04 并发与幂等
 
@@ -82,6 +86,21 @@ skipped=0 做 junit 硬门（REQUIRE_S3=1；rustfs service 常驻）。
 
 - `0006_s1b1_bundle_idem`：`rx_bundle`、`idempotency_record`（RLS）
 - `0007_s1b1_transition_seq`：`rx_transition.seq` + `(rx_id, seq)` 索引
+
+## Final Gate 定向修复（F1–F5，2026-10-24）
+
+每项均先写失败测试再修复（修复前 10/12 红，修复后 12/12 绿）：
+
+| # | 缺陷（负测证据） | 修复 |
+|---|---|---|
+| F1 | 无 `confirm_submit` 字段提交仍返回 200（默认值绕过）；签署版本未持久化 | `confirm_submit` 改为必填；新增 `rx.signed_rx_version` 列并在 submit 写入；`RxOut`/OpenAPI 同步 |
+| F2 | 按钮 Check-in 后建包 → 追加 STL → 再次下载**复用了无附件旧包** | `content_fingerprint`（字段+部件+引用集 sha256）作为唯一复用键；`rx_version-1` 启发式移除 |
+| F3 | PDF `Items: 0`、无患者/实验室/明细；非 Latin-1 静默变 `?` | build_bundle 真实查询（Patient/Organization/RosterMember/RxItem+CatalogItem）；reportlab 渲染，非 Latin-1 行用 CID 字体 STSong-Light；pypdf 提取验证中文不被替换 |
+| F4 | flush 失败（无补偿范围）与 presign 失败（commit 之后才生成 URL）会留孤儿对象或假 Check-in | flush、presign、commit 全部纳入补偿区；任一失败删除已传对象且 Rx 不变；补偿边界写入 ADR-0008，不声称跨 S3/PG 单事务 |
+| F5 | `idempotency_record.key` 全局唯一：他用户用同 key 提交被 409 碰撞 | 复合唯一 `(tenant_id, org_id, user_id, endpoint, key)`（迁移 0008）；回放核对 actor+endpoint+request_hash+对象授权 |
+
+测试：`tests/test_rx_finalgate.py` 12 项；API 全量 111 passed /
+6 skipped（skip 仅本地无 S3 门控）。迁移 `0008_finalgate`。
 
 ## 未解决/风险
 

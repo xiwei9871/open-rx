@@ -1,7 +1,7 @@
 # ADR-0008 Rx 交付包两阶段下载与 Check-in 语义界定（EasyRS 自有规则）
 
-- **状态**：ACCEPTED（S1b.1）
-- **日期**：2026-01-12
+- **状态**：ACCEPTED（S1b.1；Final Gate 修订复用与补偿语义）
+- **日期**：2026-10-24
 - **关联**：S1b1-02；`docs/research/v1.1-evidence/` SRC03（EasyRx 下载即 Check-in 的证据）
 
 ## 背景
@@ -35,10 +35,17 @@ Check-in"界定为可复核的服务端事件，而非虚构物理下载完成�
 "下载触发 Check-in"在 EasyRS 中精确定义为：**交付包成功生成并落库 +
 明确的已认证下载动作被接受**，而非字节到达对端。
 
-幂等与复用：同内容版本（`rx.version` 或 `version-1`，因 Check-in 自身
-只 bump 版本不改内容）的 ready bundle 直接复用；内容变更（条目、字段、
-附件）一律 bump `rx.version` 使旧包失效。Check-in 与 Unsubmit 并发由
-行锁 + 版本校验保证恰有一条转换成功。
+幂等与复用：复用键是 `content_fingerprint`（sha256 覆盖 Rx 内容字段、
+部件配置与有效附件引用集合），不是 `rx.version`。状态变化（含
+Check-in 自身的版本 bump）不改变指纹 → 可复用；任何内容变更改变指纹
+→ 必须重建（原 `rx_version >= version-1` 启发式已废弃——它无法区分
+"状态+1"与"内容+1"）。Check-in 与 Unsubmit 并发由行锁 + 版本校验保证
+恰有一条转换成功。
+
+补偿边界：PostgreSQL 与 S3 不共享 ACID 事务。上传成功后的任一步失败
+（flush、presign、commit）执行补偿删除对象，保证"存储里有包 ⇒ 数据库
+有记录"且不留孤儿；失败路径下 Rx 不发生状态变更。不声称跨系统物理
+单事务原子性。
 
 诊所自下载同一路径但不触发 Check-in（`checked_in_via` 仅对目标实验室
 置位）。

@@ -1,47 +1,69 @@
-"""Minimal deterministic single-page PDF writer (EasyRS-owned layout).
+"""Prescription summary PDF (EasyRS-owned layout, not a vendor form copy).
 
-No external dependency: emits a valid PDF 1.4 document with one Helvetica
-text block. Used for the Rx summary sheet inside the lab delivery bundle —
-our own layout, not a copy of any vendor's form.
+ReportLab-based. Latin-1 lines render in Helvetica; any line containing a
+character outside Latin-1 falls back to the built-in CID font STSong-Light
+(Adobe-GB1, covers CJK + Latin) so Unicode text is never silently mangled
+to '?'.
 """
+import io
 
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfgen import canvas
+
+_CID_REGISTERED = False
 _MARG_X = 56
-_TOP_Y = 760
+_TOP_Y = 770
+_LINE = 15
 
 
-def _esc(s: str) -> str:
-    return s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+def _latin1_ok(s: str) -> bool:
+    try:
+        s.encode("latin-1")
+        return True
+    except UnicodeEncodeError:
+        return False
 
 
-def simple_pdf(title: str, lines: list[tuple[str, str]]) -> bytes:
-    """Render a title + (label, value) rows as a one-page PDF."""
-    body = ["BT", "/F1 16 Tf", f"{_MARG_X} {_TOP_Y} Td", f"({_esc(title)}) Tj"]
-    body += ["/F1 10 Tf", "0 -28 Td"]
-    for label, value in lines:
-        body.append(f"({_esc(label)}: {_esc(value)}) Tj")
-        body.append("0 -16 Td")
-    body.append("ET")
-    stream = "\n".join(body).encode("latin-1", "replace")
+def _font_for(s: str) -> str:
+    global _CID_REGISTERED
+    if _latin1_ok(s):
+        return "Helvetica"
+    if not _CID_REGISTERED:
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        _CID_REGISTERED = True
+    return "STSong-Light"
 
-    objects: list[bytes] = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-         b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n"
-        + stream + b"\nendstream",
-    ]
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = [0]
-    for i, obj in enumerate(objects, start=1):
-        offsets.append(len(out))
-        out += f"{i} 0 obj\n".encode() + obj + b"\nendobj\n"
-    xref_pos = len(out)
-    out += f"xref\n0 {len(objects) + 1}\n".encode()
-    out += b"0000000000 65535 f \n"
-    for off in offsets[1:]:
-        out += f"{off:010d} 00000 n \n".encode()
-    out += (f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-            f"startxref\n{xref_pos}\n%%EOF\n").encode()
-    return bytes(out)
+
+def prescription_pdf(title: str, sections: list[tuple[str, list[str]]],
+                     footer: str) -> bytes:
+    """Render a title, then labelled sections of plain text lines."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    width, height = 612, 792
+    y = _TOP_Y
+
+    def line(text: str, size: int = 10) -> None:
+        nonlocal y
+        if y < 60:  # crude but safe pagination
+            c.showPage()
+            y = _TOP_Y
+        c.setFont(_font_for(text), size)
+        c.drawString(_MARG_X, y, text)
+        y -= _LINE
+
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(_MARG_X, y, title if _latin1_ok(title) else title)
+    y -= 24
+    for heading, rows in sections:
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(_MARG_X, y, heading)
+        y -= _LINE + 2
+        for r in rows:
+            line(r)
+        y -= 6
+    c.setFont(_font_for(footer), 8)
+    c.drawString(_MARG_X, y - 4, footer)
+    c.showPage()
+    c.save()
+    return buf.getvalue()

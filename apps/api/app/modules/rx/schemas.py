@@ -32,7 +32,9 @@ class RxSubmit(BaseModel):
     # the business record of who signed; the authenticated user id, org,
     # UTC time and Rx version are stamped server-side.
     signature_name: str = Field(min_length=1, max_length=200)
-    confirm_submit: bool = True
+    # Required — the client must explicitly send true; there is no default
+    # that could silently confirm on the user's behalf (Final Gate F1).
+    confirm_submit: bool
 
 
 class RxUnsubmit(BaseModel):
@@ -89,6 +91,7 @@ class RxOut(BaseModel):
     doctor_id: uuid.UUID | None
     checked_in_via: str | None
     signature_name: str | None
+    signed_rx_version: int | None
     version: int
     submitted_at: datetime | None
     checked_in_at: datetime | None

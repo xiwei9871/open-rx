@@ -380,14 +380,26 @@ async def submit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
             "code": "confirmation_required",
             "message": "confirm_submit must be true to submit"})
     ph = _payload_hash(rx_id, body.model_dump(), if_match)
-    # Replay short-circuit: first result wins, later state never leaks back.
+    # Replay short-circuit, scoped to (tenant, org, user, endpoint, key):
+    # first result wins, later state never leaks back (Final Gate F5).
     prior = (await db.execute(select(IdempotencyRecord).where(
+        IdempotencyRecord.tenant_id == p.tenant_id,
+        IdempotencyRecord.org_id == p.org.id,
+        IdempotencyRecord.user_id == p.user.id,
+        IdempotencyRecord.endpoint == "submitRx",
         IdempotencyRecord.key == idempotency_key))).scalar_one_or_none()
     if prior:
-        if prior.request_hash != ph or prior.org_id != p.org.id:
+        if prior.request_hash != ph:
             raise HTTPException(status_code=409, detail={
                 "code": "idempotency_payload_mismatch",
                 "message": "Idempotency-Key reuse with different payload"})
+        # Object authorization still applies on replay — a principal who
+        # lost access must not receive the recorded snapshot.
+        rid = (prior.response_json or {}).get("id")
+        snap_rx = await db.get(Rx, uuid.UUID(rid)) if rid else None
+        if (not snap_rx or snap_rx.tenant_id != p.tenant_id
+                or not _is_party(p, snap_rx)):
+            await _deny(db, request, p, "rx_not_visible")
         return prior.response_json
     rx = await _rx_for_practice_write(db, p, rx_id, request)
     _require_if_match(if_match, rx.version)
@@ -417,6 +429,7 @@ async def submit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
     rx.submitted_at = datetime.now(UTC)
     rx.submitted_by_user_id = p.user.id
     rx.signature_name = body.signature_name.strip()
+    rx.signed_rx_version = signed_version
     rx.version += 1
     _record_transition(db, p, rx, "draft", "submitted", via="button",
                        note=body.note)
@@ -535,13 +548,15 @@ async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
     if rx.status == "draft":
         raise _illegal("Draft prescriptions have no delivery bundle")
 
-    # Content-version reuse: every content mutation (items, fields,
-    # attachments) bumps rx.version; a check-in bumps it exactly once
-    # without changing deliverable content. A ready bundle built at
-    # version v or v-1 therefore still describes the same package.
+    # Content-fingerprint reuse (Final Gate F2): reuse a ready bundle iff
+    # its fingerprint — over Rx fields, item config and the live reference
+    # set — matches the current content. Status-only changes (check-in)
+    # never invalidate; any content change does.
+    from app.modules.rx.bundle import content_fingerprint
+    fp = await content_fingerprint(db, rx)
     existing = (await db.execute(select(RxBundle).where(
         RxBundle.rx_id == rx.id, RxBundle.status == "ready",
-        RxBundle.rx_version >= rx.version - 1)
+        RxBundle.content_fingerprint == fp)
         .order_by(RxBundle.created_at.desc()))).scalars().first()
     s = get_settings()
     created_new = False
@@ -571,15 +586,23 @@ async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
         existing = RxBundle(
             tenant_id=p.tenant_id, rx_id=rx.id, org_id=p.org.id,
             created_by_user_id=p.user.id, rx_version=rx.version,
+            content_fingerprint=fp,
             storage_key=key, sha256=sha, bytes=size, status="ready")
         db.add(existing)
-        await db.flush()
         created_new = True
 
-    # Phase B — atomic state work in the same transaction. If the commit
-    # fails, delete the object we just uploaded so storage never claims a
-    # delivery the database did not record.
+    # Phase B — flush, presign and commit inside one compensated region.
+    # PostgreSQL and S3 share no ACID transaction: if ANY step after the
+    # upload fails (flush, URL minting, commit) the uploaded object is
+    # deleted so storage never claims a delivery the database did not
+    # record, and the Rx is never left half-checked-in.
     try:
+        if created_new:
+            await db.flush()
+        url = await asyncio.to_thread(
+            s3_presign().generate_presigned_url, "get_object",
+            Params={"Bucket": s.s3_bucket, "Key": existing.storage_key},
+            ExpiresIn=_BUNDLE_URL_TTL)
         if rx.status == "submitted" and rx.lab_org_id == p.org.id:
             _apply_checkin(db, p, rx, via="download",
                            note="bundle download accepted check-in")
@@ -603,10 +626,6 @@ async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
                 pass
         raise
 
-    url = await asyncio.to_thread(
-        s3_presign().generate_presigned_url, "get_object",
-        Params={"Bucket": s.s3_bucket, "Key": existing.storage_key},
-        ExpiresIn=_BUNDLE_URL_TTL)
     return {"bundle": RxBundleOut.model_validate(existing),
             "download_url": url, "expires_in": _BUNDLE_URL_TTL}
 
