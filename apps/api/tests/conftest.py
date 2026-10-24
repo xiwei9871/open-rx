@@ -60,8 +60,11 @@ def _database():
         GRANT CONNECT ON DATABASE {TEST_DB} TO easyrs_app;
         GRANT USAGE ON SCHEMA public TO easyrs_app;
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO easyrs_app;
+        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO easyrs_app;
         ALTER DEFAULT PRIVILEGES IN SCHEMA public
             GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO easyrs_app;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO easyrs_app;
     """)
     env = dict(os.environ)
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],

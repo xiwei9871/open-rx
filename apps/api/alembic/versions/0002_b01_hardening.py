@@ -50,9 +50,22 @@ def upgrade() -> None:
                             nullable=False))
 
     # --- user_account: TOTP secret encrypted at rest -------------------------
-    op.drop_column("user_account", "totp_secret")
+    # Never silently drop enrolled secrets (S1a-00A): encrypt+move first, then
+    # drop the plaintext column. Rows whose secret can't be encrypted would
+    # raise — a loud migration failure is correct vs. silently locking users
+    # out of their second factor.
     op.add_column("user_account",
                   sa.Column("totp_secret_enc", sa.LargeBinary(), nullable=True))
+    from app.security import enc_totp
+    bind = op.get_bind()
+    for uid, secret in bind.execute(sa.text(
+            "SELECT id, totp_secret FROM user_account "
+            "WHERE totp_secret IS NOT NULL")):
+        bind.execute(
+            sa.text("UPDATE user_account SET totp_secret_enc = :enc "
+                    "WHERE id = :uid"),
+            {"enc": enc_totp(secret), "uid": uid})
+    op.drop_column("user_account", "totp_secret")
 
     # --- resolve_login: narrow pre-auth lookup without RLS bypass ------------
     # SECURITY DEFINER => runs as owner (admin, RLS-exempt) but only projects
@@ -79,9 +92,17 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS resolve_login(text)")
-    op.drop_column("user_account", "totp_secret_enc")
     op.add_column("user_account",
                   sa.Column("totp_secret", sa.String(64), nullable=True))
+    from app.security import dec_totp
+    bind = op.get_bind()
+    for uid, enc in bind.execute(sa.text(
+            "SELECT id, totp_secret_enc FROM user_account "
+            "WHERE totp_secret_enc IS NOT NULL")):
+        bind.execute(
+            sa.text("UPDATE user_account SET totp_secret = :s WHERE id = :uid"),
+            {"s": dec_totp(enc), "uid": uid})
+    op.drop_column("user_account", "totp_secret_enc")
     op.drop_column("auth_challenge", "attempts")
     op.drop_column("org_connection", "decided_at")
     op.drop_column("org_connection", "decided_by_user_id")

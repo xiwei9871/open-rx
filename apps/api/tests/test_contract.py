@@ -19,6 +19,11 @@ REQUIRED_SPEC_OPS = {
     "listMembers", "inviteMember", "listRoster", "addRosterMember",
     "listOrgConnections", "requestOrgConnection", "transitionOrgConnection",
     "listAuditEvents",
+    # S1a: patients / cases / assets
+    "searchPatients", "createPatient", "getPatient", "updatePatient",
+    "deletePatient", "listCases", "createCase", "listPatientAssets",
+    "declareUpload", "completeUpload", "getAsset", "downloadAsset",
+    "grantAssetReference", "revokeAssetReference",
 }
 EXTRA_AUTH_OPS = {
     "login", "verifyTwoFA", "logout", "me",

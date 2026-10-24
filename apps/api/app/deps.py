@@ -121,6 +121,17 @@ async def get_principal(request: Request, db: Db) -> Principal:
 Me = Annotated[Principal, Depends(get_principal)]
 
 
+async def limit_writes(p: Principal) -> None:
+    """Shared sensitive-write throttle — per-user fixed window (B0.1)."""
+    from app.config import get_settings
+    from app.ratelimit import allow
+    s = get_settings()
+    if not await allow("write", str(p.user.id),
+                       s.rl_write_limit, s.rl_write_window):
+        raise HTTPException(status_code=429, detail={
+            "code": "rate_limited", "message": "Too many write operations"})
+
+
 def require_perm(perm: str):
     async def guard(request: Request, db: Db, p: Me) -> Principal:
         if perm not in p.permissions:

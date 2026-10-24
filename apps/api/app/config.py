@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     s3_access_key: str = "easyrs_dev"
     s3_secret_key: str = "dev_minio_pw_change_me"
     s3_bucket: str = "easyrs-assets-dev"
+    # endpoint embedded in presigned URLs the browser must dial (defaults to
+    # the internal endpoint; compose sets http://localhost:9000)
+    s3_public_endpoint_url: str | None = None
+    upload_max_bytes: int = 200 * 1024 * 1024  # 200MB STL ceiling
+    upload_session_ttl_seconds: int = 3600
     session_secret: str = _DEV_DEFAULTS["session_secret"]
     # base64 Fernet key; REQUIRED in prod (else derived from session_secret)
     totp_encryption_key: str | None = None

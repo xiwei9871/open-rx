@@ -102,7 +102,19 @@ async def login(body: LoginRequest, request: Request, response: Response, db: Db
         await db.commit()
         raise _unauth()
 
-    if user.totp_enabled and user.totp_secret_enc:
+    if user.totp_enabled:
+        if not user.totp_secret_enc:
+            # Fail closed (S1a-00A): an enabled flag without a usable secret is
+            # an inconsistent account state. Never downgrade to single-factor;
+            # deny and require controlled recovery (re-enrollment by admin).
+            record(db, action="login_denied_2fa_inconsistent",
+                   object_type="user_account", object_id=user.id,
+                   actor_user_id=user.id, request=request)
+            await db.commit()
+            raise HTTPException(status_code=401, detail={
+                "code": "totp_recovery_required",
+                "message": "Two-factor is enabled but its secret is unusable; "
+                           "contact an administrator to re-enroll"})
         ch = AuthChallenge(
             user_id=user.id, purpose="totp_login",
             expires_at=datetime.now(UTC) + timedelta(seconds=_s.challenge_ttl_seconds),
@@ -130,9 +142,15 @@ async def verify_2fa(body: TwoFAVerifyRequest, request: Request,
             or ch.attempts >= _s.challenge_max_attempts:
         raise _unauth("Challenge expired or exhausted")
     user = await db.get(UserAccount, ch.user_id)
-    ok = bool(user and user.totp_secret_enc
-              and pyotp.TOTP(dec_totp(user.totp_secret_enc)).verify(
-                  body.code, valid_window=1))
+    try:
+        ok = bool(user and user.totp_secret_enc
+                  and pyotp.TOTP(dec_totp(user.totp_secret_enc)).verify(
+                      body.code, valid_window=1))
+    except Exception:
+        # Corrupt/undecryptable secret must deny, not 500 (fail closed).
+        ok = False
+        record(db, action="login_2fa_secret_unusable", object_type="user_account",
+               object_id=ch.user_id, request=request)
     if not ok:
         ch.attempts += 1
         exhausted = ch.attempts >= _s.challenge_max_attempts

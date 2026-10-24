@@ -320,6 +320,28 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+  /patients/{patientId}/assets:
+    get:
+      tags: [patients]
+      operationId: listPatientAssets
+      summary: "Live file references to assets on this patient or its cases (S1a extension)"
+      x-status: provisional
+      x-scope: member of owning org
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "200":
+          description: "File references joined with asset metadata"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {type: object}
+                  next_cursor: {type: [string, "null"]}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /patients/{patientId}/rx-history:
     get:
       tags: [patients]
@@ -1294,14 +1316,16 @@ components:
     # ---------- Patients ----------
     Patient:
       type: object
-      required: [id, org_id, first_name, last_name, version]
+      required: [id, org_id, patient_number, first_name, last_name, version]
       properties:
         id: {type: string, format: uuid}
         org_id: {type: string, format: uuid}
+        patient_number: {type: string, readOnly: true, description: "org-scoped human number, e.g. P000123"}
         first_name: {type: string}
         last_name: {type: string}
         dob: {type: [string, "null"], format: date}
         external_ref: {type: [string, "null"]}
+        notes: {type: [string, "null"]}
         version: {type: integer, readOnly: true}
         deleted_at: {type: [string, "null"], format: date-time, readOnly: true}
         created_at: {type: string, format: date-time, readOnly: true}
@@ -1314,6 +1338,7 @@ components:
         dob: {type: [string, "null"], format: date}
         external_ref: {type: [string, "null"], maxLength: 128}
         notes: {type: [string, "null"]}
+        confirm_duplicate: {type: boolean, default: false, description: "explicit confirmation required after a 409 possible_duplicate"}
     PatientUpdate:
       type: object
       properties:
@@ -1587,7 +1612,7 @@ components:
       properties:
         id: {type: string, format: uuid}
         asset_id: {type: string, format: uuid}
-        subject_type: {type: string, enum: [patient, rx, notification, order]}
+        subject_type: {type: string, enum: [patient, case, rx, notification, order]}
         subject_id: {type: string, format: uuid}
         role: {type: string, enum: [original, optimized, processed, print_ready, attachment]}
         revoked_at: {type: [string, "null"], format: date-time, readOnly: true}
@@ -1601,7 +1626,7 @@ components:
       type: object
       required: [subject_type, subject_id, role]
       properties:
-        subject_type: {type: string, enum: [patient, rx, notification, order]}
+        subject_type: {type: string, enum: [patient, case, rx, notification, order]}
         subject_id: {type: string, format: uuid}
         role: {type: string, enum: [original, optimized, processed, print_ready, attachment]}
     DownloadRequest:

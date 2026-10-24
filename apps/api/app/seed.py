@@ -6,8 +6,9 @@ users admin@pa.dev / doctor@pa.dev / staff@pa.dev / admin@la.dev / tech@la.dev
 (password: Passw0rd!dev), PA<->LA accepted connection, Dr. Demo roster member.
 """
 import asyncio
+from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db import admin_session
 from app.modules.iam.models import (
@@ -80,6 +81,29 @@ async def seed() -> None:
             db.add(RosterMember(tenant_id=tenant.id, org_id=orgs["PA"].id,
                                 kind="doctor", display_name="Dr. Demo",
                                 is_default=True))
+
+        # S1a: synthetic patient + case (dev/test only)
+        from app.modules.clinical.models import Patient, TreatmentCase
+        pat = (await db.execute(select(Patient).where(
+            Patient.external_ref == "SYN-0001"))).scalar_one_or_none()
+        if not pat:
+            num = (await db.execute(
+                text("SELECT nextval('patient_number_seq')"))).scalar()
+            pat = Patient(
+                tenant_id=tenant.id, org_id=orgs["PA"].id,
+                patient_number=f"P{num:06d}",
+                first_name="Ava", last_name="Synthetic",
+                dob=date(2010, 5, 14), external_ref="SYN-0001",
+                notes="fully synthetic patient")
+            db.add(pat)
+            await db.flush()
+            doctor = (await db.execute(select(UserAccount).where(
+                UserAccount.email == "doctor@pa.dev"))).scalar_one()
+            db.add(TreatmentCase(
+                tenant_id=tenant.id, org_id=orgs["PA"].id, patient_id=pat.id,
+                label="Initial alignment (synthetic)", stage="active",
+                opened_by_user_id=doctor.id,
+                opened_at=datetime.now(UTC)))
 
         await db.commit()
         print(f"seed ok: tenant={tenant.id} PA={orgs['PA'].id} "

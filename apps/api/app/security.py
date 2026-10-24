@@ -58,18 +58,32 @@ def dec_totp(enc: bytes) -> str:
     return _totp_fernet().decrypt(enc).decode()
 
 
-# PROVISIONAL — platform-level only. Clinical capabilities (rx/patient/asset
-# writes) intentionally absent until V1.1 role verification (V-03).
+# PROVISIONAL — platform + S1a patient/asset capabilities. Clinical Rx
+# capabilities stay absent until V1.1 role verification (V-03) — do NOT
+# silently promote. patient:* maps to the contract's "org member with patient
+# access/write"; labs hold asset:* only for their own uploads — patient rows
+# stay owning-org-only until an authorized share channel (Rx) exists.
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "practice_admin": frozenset({
         "org:manage", "location:write", "member:write", "roster:write",
         "connection:write", "audit:read",
+        "patient:read", "patient:write", "patient:delete",
+        "asset:read", "asset:write", "asset:share",
     }),
-    "practice_doctor": frozenset({"roster:read"}),
-    "practice_staff": frozenset({"roster:read"}),
+    "practice_doctor": frozenset({
+        "roster:read",
+        "patient:read", "patient:write",
+        "asset:read", "asset:write", "asset:share",
+    }),
+    "practice_staff": frozenset({
+        "roster:read",
+        "patient:read", "patient:write",
+        "asset:read", "asset:write",
+    }),
     "lab_admin": frozenset({
         "org:manage", "location:write", "member:write",
         "connection:write", "audit:read",
+        "asset:read", "asset:write",
     }),
-    "lab_technician": frozenset(),
+    "lab_technician": frozenset({"asset:read"}),
 }
