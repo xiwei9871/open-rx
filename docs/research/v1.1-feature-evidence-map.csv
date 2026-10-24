@@ -1,0 +1,168 @@
+feature_id,module,feature,v11_status,evidence_sources,s1b_scope,notes
+IAM-001,机构与权限,机构信息及配置,CONFIRMED,"SRC01,SRC-D1",S1B_CANDIDATE,practice profile config exists
+IAM-002,机构与权限,多个诊所地点,CONFIRMED,"SRC01,SRC-D1",S1B_CANDIDATE,multiple office locations incl. lab-created
+IAM-003,机构与权限,医生列表及默认医生,PARTIAL,"SRC01,SRC-D1",S1B_CANDIDATE,doctor list exists; default-doctor flag unverified
+IAM-004,机构与权限,临床员工名册,CONFIRMED,SRC01,S1B_CANDIDATE,clinical staff = non-login name records
+IAM-005,机构与权限,临床员工必填开关,CONFIRMED,SRC01,S1B_CANDIDATE,impression/submitted-staff required only if account setting on
+IAM-006,机构与权限,独立员工登录账号,CONFIRMED,SRC-D5,S1B_CANDIDATE,unlimited user accounts; admin-only mgmt; 5 flags
+IAM-007,机构与权限,诊所连接实验室请求,CONFIRMED,"SRC-D4,SRC03",S1B_CANDIDATE,admin-only request; lab approve/deny
+IAM-008,机构与权限,实验室为医生提供模板的共享权限,CONFIRMED,SRC33,S1B_CANDIDATE,template grants Copy/Edit/View; owner manages
+IAM-009,机构与权限,账号密码管理,PARTIAL,"SRC-D5,SRC29",POST_S1B,email-validated passwords; reset semantics partial
+IAM-010,机构与权限,时区设置,PARTIAL,SRC15,POST_S1B,practice time zone setting exists (index level)
+IAM-011,机构与权限,角色/最小权限矩阵,PROVISIONAL,design,POST_S1B,EasyRS role matrix - no EasyRx matrix published
+IAM-012,机构与权限,双因素认证与访问审计,PROVISIONAL,design,POST_S1B,EasyRS 2FA/audit - not EasyRx-documented
+PAT-001,患者与病例,患者新增及编辑,CONFIRMED,"SRC01,SRC30,SRC-D6",POST_S1B,create via Rx inline or Patients tab
+PAT-002,患者与病例,既有患者输入联想,CONFIRMED,SRC01,POST_S1B,same-lastname autofill suggestion
+PAT-003,患者与病例,外部患者编号,CONFIRMED,SRC01,POST_S1B,external patient ID field + lookup
+PAT-004,患者与病例,生日帮助识别同名患者,CONFIRMED,SRC01,POST_S1B,DOB recommended for same-name disambiguation
+PAT-005,患者与病例,患者处方历史,CONFIRMED,"SRC30,SRC-D2",S1B_CANDIDATE,Rx history on edit-patient screen
+PAT-006,患者与病例,患者直接附加扫描文件,CONFIRMED,"SRC01,SRC05,SRC31",S1B_CANDIDATE,attach files directly to patient record
+PAT-007,患者与病例,外部管理系统患者匹配与关联,CONFIRMED,SRC30,POST_S1B,PMS find-or-add + manual link
+PAT-008,患者与病例,病例Case实体及阶段,PARTIAL,design+SRC01,POST_S1B,case entity = EasyRS design; Rx↔patient link confirmed
+PAT-009,患者与病例,患者软删除、保留与恢复策略,PARTIAL,SRC-D6,POST_S1B,Rx delete→60d restore; patient retention rules ours
+RX-001,处方创建与模板,由仪表盘或患者记录创建Rx,CONFIRMED,SRC01,S1B_CANDIDATE,dashboard + patient-record Create Rx
+RX-002,处方创建与模板,指定医生地点技工室与需要日期,CONFIRMED,"SRC01,SRC02",S1B_CANDIDATE,doctor/office/lab/date-needed fields; date+lab changeable on canvas
+RX-003,处方创建与模板,处方唯一编号,CONFIRMED,"SRC01,SRC24",S1B_CANDIDATE,unique Prescription ID; billing keys on it
+RX-004,处方创建与模板,保存处方草稿,CONFIRMED,"SRC01,SRC24",S1B_CANDIDATE,Save draft; re-editable incl. doctor/date
+RX-005,处方创建与模板,Universal Library非连接实验室打印单,CONFIRMED,SRC01,S1B_CANDIDATE,Universal Library create+print; cannot submit
+RX-006,处方创建与模板,Parts部件检索与选择,CONFIRMED,SRC01,S1B_CANDIDATE,parts tree + search
+RX-007,处方创建与模板,Appliances整件设备库,CONFIRMED,SRC01,S1B_CANDIDATE,appliances in same library
+RX-008,处方创建与模板,牙弓画布部件拖放定位,CONFIRMED,SRC01,S1B_CANDIDATE,drag/drop; blue anchor points; arch rules exist
+RX-009,处方创建与模板,部件可配置选项,CONFIRMED,SRC01,S1B_CANDIDATE,part options via red gear; optional to set
+RX-010,处方创建与模板,模板保存与调用,CONFIRMED,"SRC01,SRC33",S1B_CANDIDATE,save-as-template + one-click apply editable
+RX-011,处方创建与模板,实验室/诊所模板来源区分,CONFIRMED,"SRC01,SRC33",S1B_CANDIDATE,lab templates marked blue circle+letter
+RX-012,处方创建与模板,模板分享与复制/查看/编辑权限,CONFIRMED,SRC33,S1B_CANDIDATE,Copy/Edit/View grants; owner manages permissions
+RX-013,处方创建与模板,自由文字注释,CONFIRMED,SRC01,S1B_CANDIDATE,text annotations on drawing + comments below
+RX-014,处方创建与模板,手绘线与折线标注,CONFIRMED,SRC02,S1B_CANDIDATE,freehand + polyline sketch icons
+RX-015,处方创建与模板,亚克力颜色及备注,CONFIRMED,"SRC01,SRC02",S1B_CANDIDATE,acrylic colors + acrylic notes
+RX-016,处方创建与模板,牙位拔牙/IPR/Resets记录,CONFIRMED,SRC02,S1B_CANDIDATE,Resets tab: extracts/IPR/resets; not for aligner/IDB
+RX-017,处方创建与模板,Aligner专用处方表单,CONFIRMED,SRC25,S1B_CANDIDATE,aligner tab + lab-configured dropdowns
+RX-018,处方创建与模板,IDB间接粘接专用处方,PARTIAL,"SRC15,SRC02",S1B_CANDIDATE,IDB tab exists; lab-configured options; field detail partial
+RX-019,处方创建与模板,附件上传STL/PDF及其他文件,CONFIRMED,"SRC01,SRC24",S1B_CANDIDATE,any-file uploads; post-submit manual add OK
+RX-020,处方创建与模板,Checkout与Submit流程,CONFIRMED,"SRC01,SRC02",S1B_CANDIDATE,checkout page + Sign&Submit + Submit Prescription
+RX-021,处方创建与模板,PDF处方导出,CONFIRMED,"SRC01,SRC-D3",S1B_CANDIDATE,print/download PDF; barcoded PDF for labs
+FLOW-001,Rx状态与工作台,仪表盘多视图及状态计数,CONFIRMED,"SRC02,SRC03",S1B_CANDIDATE,dashboard tabs by status
+FLOW-002,Rx状态与工作台,日期范围及状态筛选,CONFIRMED,"SRC02,SRC34",S1B_CANDIDATE,date + status filters
+FLOW-003,Rx状态与工作台,Office/Doctor/Lab/Tag等筛选,PARTIAL,"SRC34-2019,SRC18",S1B_CANDIDATE,mark-shipped filter by office/location/doctor/tags (index)
+FLOW-004,Rx状态与工作台,用户保存筛选视图与默认视图,UNKNOWN,none,POST_S1B,saved filter views not verified
+FLOW-005,Rx状态与工作台,草稿Saved及Submitted状态,CONFIRMED,"SRC01,SRC03,SRC24",S1B_CANDIDATE,Saved draft + Submitted states
+FLOW-006,Rx状态与工作台,实验室Checked-in,CONFIRMED,SRC03,S1B_CANDIDATE,check-in button flow
+FLOW-007,Rx状态与工作台,下载ZIP同时触发Checked-in,CONFIRMED,SRC03,S1B_CANDIDATE,ZIP download triggers Checked-In
+FLOW-008,Rx状态与工作台,已Check-in禁止诊所Unsubmit,CONFIRMED,"SRC03,SRC24",S1B_CANDIDATE,no unsubmit after check-in
+FLOW-009,Rx状态与工作台,已提交未Check-in撤回为Saved,CONFIRMED,SRC24,S1B_CANDIDATE,unsubmit returns to Saved editable/deletable
+FLOW-010,Rx状态与工作台,提交后追加手动文件,CONFIRMED,SRC24,S1B_CANDIDATE,manual files post-submit OK; iTero attach stricter
+FLOW-011,Rx状态与工作台,Complete阶段,CONFIRMED,SRC03,S1B_CANDIDATE,Completed = Premium/Enterprise check-out
+FLOW-012,Rx状态与工作台,Shipped出货与追踪号,CONFIRMED,SRC03,S1B_CANDIDATE,Ship Rx + optional tracking; USPS/UPS in-browser
+FLOW-013,Rx状态与工作台,Received诊所收货与Delivered交付,PARTIAL,"SRC02,SRC26",S1B_CANDIDATE,Received per-office + Delivered marks exist
+FLOW-014,Rx状态与工作台,到期预警Needed Soon,UNKNOWN,none,POST_S1B,Needed Soon alert not verified
+FLOW-015,Rx状态与工作台,按营业日自动计算最低交付日,CONFIRMED,SRC27,S1B_CANDIDATE,days-in-lab + transit = min date; holidays skipped
+FLOW-016,Rx状态与工作台,订单版本与审批审计事件,PARTIAL,SRC-D5,S1B_CANDIDATE,per-login revision history on Rx; event model ours
+FLOW-017,Rx状态与工作台,异常取消/重开/重做子流程,PARTIAL,"SRC02,SRC-D2,SRC15",S1B_CANDIDATE,remake/repair requests + delete/restore exist; cancel/reopen rules undocumented
+COM-001,沟通与协作,Rx评论和讨论,CONFIRMED,SRC01,S1B_CANDIDATE,two-way comments incl. post-submit
+COM-002,沟通与协作,重要临床通知,CONFIRMED,"SRC23,SRC-D7",S1B_CANDIDATE,clinical notifications system
+COM-003,沟通与协作,仅通知并确认,CONFIRMED,"SRC23,SRC-D7",S1B_CANDIDATE,Notify Only → acknowledge → Received
+COM-004,沟通与协作,要求医生审批的通知,CONFIRMED,"SRC23,SRC-D7",S1B_CANDIDATE,Notify+Require Approval w/ doctor signature
+COM-005,沟通与协作,仅Email通知不记录站内消息,CONFIRMED,SRC23,S1B_CANDIDATE,email-only unrecorded option
+COM-006,沟通与协作,针对具体附件的问题通知,CONFIRMED,SRC23,S1B_CANDIDATE,per-file notify-regarding
+COM-007,沟通与协作,站内消息中心,CONFIRMED,"SRC01,SRC23",S1B_CANDIDATE,message center + clinical verification page
+COM-008,沟通与协作,Email/弹窗提醒偏好,CONFIRMED,"SRC02,SRC-D4",S1B_CANDIDATE,alert notifications email/popup types
+COM-009,沟通与协作,标签管理及颜色,PARTIAL,"SRC01,SRC02,SRC34",S1B_CANDIDATE,tags exist + filtering; colors unverified
+COM-010,沟通与协作,Rx Feedback评分反馈,CONFIRMED,"SRC03,SRC15",S1B_CANDIDATE,prescription feedback rating + lab review + excel report
+COM-011,沟通与协作,Share with colleague安全分享,CONFIRMED,SRC-D3,S1B_CANDIDATE,share link 24h/5-open limit + file download
+COM-012,沟通与协作,EasyRx Forms电子问卷与签署,CONFIRMED,SRC32,POST_S1B,EasyRx Forms lab feature w/ e-sign
+ASSET-001,3D文件与资产,STL手动上传及上下颌分类,CONFIRMED,"SRC01,SRC05",S1B_CANDIDATE,manual upload; upper/lower links
+ASSET-002,3D文件与资产,原始与优化版本区分,CONFIRMED,SRC05,POST_S1B,original + optimized versions coexist
+ASSET-003,3D文件与资产,3D Viewer浏览器预览,CONFIRMED,SRC06,POST_S1B,in-browser 3D viewer all plans
+ASSET-004,3D文件与资产,STL Optimize/Scrubber,CONFIRMED,SRC06,POST_S1B,scrub + scrub&remesh actions
+ASSET-005,3D文件与资产,从Rx和患者记录访问同一模型,CONFIRMED,"SRC01,SRC05",S1B_CANDIDATE,Rx files also on patient record
+ASSET-006,3D文件与资产,STL Print List,CONFIRMED,SRC05,POST_S1B,View STL Print List
+ASSET-007,3D文件与资产,EasyFS类外部文件访问,CONFIRMED,SRC08,POST_S1B,EasyFS network drive folders
+ASSET-008,3D文件与资产,文件哈希与内容去重,PROVISIONAL,design,S1B_CANDIDATE,EasyRS sha256 dedup - EasyRx dedup undocumented
+ASSET-009,3D文件与资产,文件版本链和不可变原件,PARTIAL,"SRC05,SRC-D6",S1B_CANDIDATE,version coexistence confirmed; immutability = our design
+ASSET-010,3D文件与资产,防病毒/恶意网格隔离及配额,PARTIAL,SRC01,POST_S1B,storage GB limit confirmed; malware scanning = our requirement (format_status already honest)
+EDIT-001,3D人工编辑,模型方向校准三点定位,CONFIRMED,SRC05,POST_S1B,3-point orient
+EDIT-002,3D人工编辑,原始咬合关系保存,CONFIRMED,"SRC04,SRC35",POST_S1B,preserve occlusion option
+EDIT-003,3D人工编辑,人工绘制Trim曲线,CONFIRMED,SRC05,POST_S1B,freehand trim path drawing
+EDIT-004,3D人工编辑,移动Trim控制点与失败标记,CONFIRMED,SRC05,POST_S1B,adjustable points; red failure marks
+EDIT-005,3D人工编辑,沿Trim曲线裁剪模型,CONFIRMED,SRC05,POST_S1B,Trim Model cut
+EDIT-006,3D人工编辑,切割平面Cut Model,CONFIRMED,SRC05,POST_S1B,Cut Model 2-point plane
+EDIT-007,3D人工编辑,实心底座Regular Base,CONFIRMED,"SRC04,SRC05",POST_S1B,regular solid base
+EDIT-008,3D人工编辑,中空底座Hollow Base,CONFIRMED,"SRC04,SRC05",POST_S1B,hollow base
+EDIT-009,3D人工编辑,自定义底座高度和壁厚,CONFIRMED,"SRC04,SRC05",POST_S1B,base height + wall thickness
+EDIT-010,3D人工编辑,排液孔与剥离槽,CONFIRMED,SRC05,POST_S1B,drain holes + pry notch
+EDIT-011,3D人工编辑,模型标签凹刻/凸刻,CONFIRMED,SRC05,POST_S1B,engraved/embossed label
+EDIT-012,3D人工编辑,第二标签及自定义标记,CONFIRMED,SRC05,POST_S1B,up to 2 positioned labels
+EDIT-013,3D人工编辑,人工去托槽与牙面润饰工具,CONFIRMED,SRC35,POST_S1B,EBR manual bracket/band removal add-on
+EDIT-014,3D人工编辑,网格水密/自交/厚度QA,PROVISIONAL,design,POST_S1B,mesh QA metrics = EasyRS design
+AI-001,3D自动化与AI,3D Command Center扫描查询与状态,CONFIRMED,SRC04,POST_S1B,3D Command Center exists
+AI-002,3D自动化与AI,自动模式与按需模式,CONFIRMED,"SRC04,SRC07",POST_S1B,automatic vs on-demand
+AI-003,3D自动化与AI,按实验室排除自动处理,CONFIRMED,SRC04,POST_S1B,per-lab processing exclusion
+AI-004,3D自动化与AI,批量请求自动处理,PARTIAL,"SRC04,SRC34",POST_S1B,on-demand per-scan request; bulk retry is internal
+AI-005,3D自动化与AI,自动加底座ABS,CONFIRMED,SRC04,POST_S1B,automatic basing
+AI-006,3D自动化与AI,AI去托槽ABR,CONFIRMED,"SRC04,SRC35",POST_S1B,automated bracket removal
+AI-007,3D自动化与AI,AI Blockout倒凹填补,CONFIRMED,SRC07,POST_S1B,AI blockout levels + retention
+AI-008,3D自动化与AI,Horseshoe / Full Palate裁剪类型,CONFIRMED,SRC04,POST_S1B,horseshoe/full palate/molar-gingiva trims
+AI-009,3D自动化与AI,trim_margin和base_height参数,CONFIRMED,SRC04,POST_S1B,trim_margin + base_height params
+AI-010,3D自动化与AI,solid/hollow与wall_thickness,CONFIRMED,SRC04,POST_S1B,solid/hollow + wall_thickness
+AI-011,3D自动化与AI,标签位置/文件名命名,CONFIRMED,SRC04,POST_S1B,label position + filename-as-label
+AI-012,3D自动化与AI,自动preserve_occlusion,CONFIRMED,SRC04,POST_S1B,preserve_occlusion flag
+AI-013,3D自动化与AI,PTS切边轨迹多类型,PARTIAL,SRC04,POST_S1B,PTS trim-line auto-generation confirmed; types partial
+AI-014,3D自动化与AI,PTS gingival clearance与molar设置,PARTIAL,SRC04,POST_S1B,PTS gingival clearance/molar options partially read
+AI-015,3D自动化与AI,3D加工Profile/Recipe持久保存,PARTIAL,SRC34,POST_S1B,Templates/AI Profiles mapping confirmed 2025
+AI-016,3D自动化与AI,Ready to Print / Downloaded / Printed标识,UNKNOWN,none,POST_S1B,Ready-to-Print/Downloaded/Printed flags not verified
+AI-017,3D自动化与AI,AI异常重试/队列取消与版本固定,PARTIAL,SRC34,POST_S1B,internal bulk retry exists; our retry/queue design provisional
+LAB-001,实验室与生产MES,实验室接收提交Rx,CONFIRMED,SRC03,S1B_CANDIDATE,lab receives + reviews submitted Rx
+LAB-002,实验室与生产MES,处理中审核问题及修改建议,CONFIRMED,"SRC03,SRC23",S1B_CANDIDATE,lab edits Rx + sends notifications
+LAB-003,实验室与生产MES,手工纸质处方录入Written Check-in,CONFIRMED,SRC-D2,POST_S1B,Written Check-In Enterprise feature
+LAB-004,实验室与生产MES,多个地点及送货地址,PARTIAL,"SRC27,SRC34",POST_S1B,ship-to + production locations exist
+LAB-005,实验室与生产MES,手工录入VisualDLP订单,CONFIRMED,SRC10,POST_S1B,VisualDLP manual order entry
+LAB-006,实验室与生产MES,为订单添加多个产品/数量/牙位,CONFIRMED,SRC10,POST_S1B,multi-product + teeth/arch + qty
+LAB-007,实验室与生产MES,订单产品自动绑定价格和工艺,CONFIRMED,SRC10,POST_S1B,price+workflow auto-bind on product
+LAB-008,实验室与生产MES,Product部门分类/产品类型,CONFIRMED,SRC20,POST_S1B,department + product type grouping
+LAB-009,实验室与生产MES,Tag-along附属产品,CONFIRMED,SRC20,POST_S1B,tag-along products
+LAB-010,实验室与生产MES,Workflow与Activities生产活动,CONFIRMED,SRC09,POST_S1B,workflow = ordered activities
+LAB-011,实验室与生产MES,Production Options生产方式,CONFIRMED,SRC09,POST_S1B,production options method/cost/time
+LAB-012,实验室与生产MES,工序计划天数与时间,CONFIRMED,SRC09,POST_S1B,day-of-production scheduling
+LAB-013,实验室与生产MES,按单位非线性工时和成本,CONFIRMED,SRC09,POST_S1B,nonlinear per-unit scaling
+LAB-014,实验室与生产MES,生产工单/工作票Work Ticket,PARTIAL,SRC18,POST_S1B,custom work tickets exist (index)
+LAB-015,实验室与生产MES,生产状态与完成者追踪,CONFIRMED,SRC19,POST_S1B,per-activity completer tracking
+LAB-016,实验室与生产MES,自动最低交付与物流时间计算,CONFIRMED,"SRC27,SRC19",POST_S1B,auto min-delivery computation
+LAB-017,实验室与生产MES,返工/Adjustment关联原订单,CONFIRMED,"SRC10-idx,SRC17",POST_S1B,remake/adjustment duplicates + links original
+LAB-018,实验室与生产MES,停单On Hold及原因历史,CONFIRMED,SRC18,POST_S1B,on-hold reason in order history
+LAB-019,实验室与生产MES,物流追踪与签收,CONFIRMED,"SRC03,SRC02",POST_S1B,ship+tracking; received marks
+LAB-020,实验室与生产MES,打印机排产与耗材追踪,PROVISIONAL,design,POST_S1B,printer queue/material tracking unverified
+FIN-001,报价财务与报表,实验室价格表与客户分层价格,CONFIRMED,"SRC16,SRC-D1",S1B_CANDIDATE,up to 4 alternate price lists per practice
+FIN-002,报价财务与报表,产品变价不回溯旧订单,CONFIRMED,SRC18,S1B_CANDIDATE,price changes not retroactive
+FIN-003,报价财务与报表,可变产品报价/折扣,CONFIRMED,"SRC10,SRC-D2",S1B_CANDIDATE,variable price editable + discounts + misc
+FIN-004,报价财务与报表,Proposals预报价单,CONFIRMED,"SRC18,SRC22",POST_S1B,proposals (orderstatus 8)
+FIN-005,报价财务与报表,订单生成Invoice,CONFIRMED,"SRC-D2,SRC-D5",POST_S1B,invoice generation; practice Finances flag views
+FIN-006,报价财务与报表,收款与抵扣分配,CONFIRMED,SRC17,POST_S1B,manual/auto oldest-first payment apply
+FIN-007,报价财务与报表,财务调整及贷项,CONFIRMED,"SRC11,SRC17",POST_S1B,adjustments + credit balances
+FIN-008,报价财务与报表,税额与免税客户,CONFIRMED,SRC17,POST_S1B,tax-exempt account config
+FIN-009,报价财务与报表,月结单及重生成,CONFIRMED,SRC17,POST_S1B,mid/EOM statements + regenerate + log
+FIN-010,报价财务与报表,交易历史导出CSV/Excel/PDF,CONFIRMED,"SRC11,SRC34",POST_S1B,CSV/PDF/Excel exports; statements CSV 2025
+FIN-011,报价财务与报表,Email发票/账单,CONFIRMED,"SRC17,SRC21",POST_S1B,invoice + statement emailing
+FIN-012,报价财务与报表,EasyRx Pay第三方支付,CONFIRMED,"SRC16,SRC17",POST_S1B,EasyRx Pay (Stax) statement payment
+FIN-013,报价财务与报表,销售/账龄/订单报表,CONFIRMED,"SRC17,SRC22",POST_S1B,aging/sales/remake report suite
+FIN-014,报价财务与报表,业务绩效统计,PARTIAL,SRC22,POST_S1B,report groups + sales reports; perf metrics scope ours
+INT-001,集成与互操作,iTero扫描自动关联,CONFIRMED,"SRC01,SRC24,SRC34",POST_S1B,iTero v2 auto-attach; disconnect; case order ID
+INT-002,集成与互操作,3Shape TRIOS扫描入口,CONFIRMED,"SRC02,SRC14",POST_S1B,TRIOS recent scans + create Rx from scan
+INT-003,集成与互操作,Medit Link同步,CONFIRMED,"SRC14,SRC34",POST_S1B,Medit Link + 45-day history
+INT-004,集成与互操作,DEXIS扫描同步,CONFIRMED,SRC31,POST_S1B,Dexis pairing + auto-attach
+INT-005,集成与互操作,其它扫描仪STL导入,CONFIRMED,SRC14,POST_S1B,3Disc/Alliedstar/Planmeca/3M OCP/OrthoAnalyzer
+INT-006,集成与互操作,Dolphin/Ortho2/Cloud9/TOPS患者关联,CONFIRMED,"SRC14,SRC30",POST_S1B,Dolphin/Ortho2/Cloud9/TOPS/EagleSoft/Focus/Oasys
+INT-007,集成与互操作,Open Dental外部接口,PARTIAL,SRC14,POST_S1B,Open Dental article exists (index)
+INT-008,集成与互操作,Formlabs/NextDent等打印软件启动,CONFIRMED,"SRC14,SRC35",POST_S1B,Preform/NextDent/MiiCraft/MoonRay/EnvisionTEC/Uniz/Nexa
+INT-009,集成与互操作,Magic Touch技工系统对接,CONFIRMED,"SRC14,SRC34",POST_S1B,Magic Touch integration + 2025 API work
+INT-010,集成与互操作,EasyFS类桌面同步或挂载,CONFIRMED,SRC08,POST_S1B,EasyFS mount
+INT-011,集成与互操作,本项目OpenAPI/Webhook扩展,PROVISIONAL,design,POST_S1B,EasyRS OpenAPI/webhooks - EasyRx public API undocumented
+SAFE-001,系统保障与合规,日志审计与处方签署归属,PARTIAL,"SRC-D5,SRC28",S1B_CANDIDATE,per-login revision history + signature-to-lab; our audit impl
+SAFE-002,系统保障与合规,患者数据租户隔离,PROVISIONAL,design,S1B_CANDIDATE,tenant/org isolation = EasyRS architecture
+SAFE-003,系统保障与合规,静态与传输加密,PARTIAL,"SRC23,SRC32",POST_S1B,HIPAA-compliance claims; implementation ours
+SAFE-004,系统保障与合规,最小权限临时下载链接,CONFIRMED,"SRC-D3,SRC08",S1B_CANDIDATE,time+count-bounded share links; credential-bound mounts
+SAFE-005,系统保障与合规,恶意文件扫描与上传限制,PROVISIONAL,design,POST_S1B,AV/upload limits = EasyRS (format_status stays honest)
+SAFE-006,系统保障与合规,自动备份及恢复演练,PARTIAL,"SRC01,SRC-D6",POST_S1B,backed-up claim + 60d restore; DR drills ours
+SAFE-007,系统保障与合规,不可变AI加工溯源记录,PROVISIONAL,design,POST_S1B,immutable processing provenance ours
+SAFE-008,系统保障与合规,匿名测试数据和公共示例,PROVISIONAL,design,POST_S1B,synthetic seed only - ours
+SAFE-009,系统保障与合规,数据导出与迁移,PARTIAL,"SRC28,SRC11",POST_S1B,$150 export clause + CSV exports; full migration ours
+SAFE-010,系统保障与合规,安全合规部署基线,PROVISIONAL,design,POST_S1B,deployment baseline ours

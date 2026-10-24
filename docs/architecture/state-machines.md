@@ -26,10 +26,11 @@ stateDiagram-v2
   [*] --> draft
   draft --> submitted : submit (connection accepted, idempotent)
   submitted --> draft : unsubmit (lab 未 check-in)
-  submitted --> checked_in : lab check-in
+  submitted --> checked_in : lab check-in / download (SRC03 =)
   submitted --> cancelled : cancel (mutual) ~
-  checked_in --> in_progress : lab 开始处理 ~
+  checked_in --> in_progress : lab 内部推进 ~ E
   checked_in --> draft : rejected_by_lab → return? ?
+  checked_in --> completed : check-out (Premium/Enterprise =)
   in_progress --> completed : lab 完成制作
   in_progress --> on_hold : hold ~
   on_hold --> in_progress : resume ~
@@ -43,14 +44,21 @@ stateDiagram-v2
 
 | 迁移 | 触发者 | 前置条件 | 证据 | 事件 |
 |---|---|---|---|---|
-| draft→submitted | practice | connection=accepted；必填齐；幂等键 | = D1 | `rx.submitted` |
+| draft→submitted | practice | connection=accepted；必填齐；签名；幂等键 | = SRC01/SRC28 | `rx.submitted` |
 | submitted→draft (unsubmit) | practice | lab 未 check-in（SRC24 =） | = | `rx.unsubmitted` |
-| submitted→checked_in | lab | 显式接单；下载≠接单（FLOW-007 解耦） | =/~ | `rx.checked_in` |
-| checked_in→in_progress | lab | ~ | ~ | `rx.in_progress` |
-| in_progress→completed | lab | 套餐可配跳过（GAP-07 ~） | =/~ | `rx.completed` |
-| *→on_hold / →in_progress | lab | ~ | ~ | `rx.on_hold`/`rx.resumed` |
+| submitted→checked_in | lab | 显式 check-in **或下载 Rx 包——下载即置 Checked-In（SRC03 =，V1.1 已证实；旧假设"下载≠接单"作废）** | = | `rx.checked_in` |
+| checked_in→in_progress | lab | EasyRx 无公开等价态；EasyRS 内部推进阶段 | ~ E | `rx.in_progress` |
+| checked_in→completed | lab | Premium/Enterprise check-out 记录日期；低套餐工作流可跳过（SRC03 =） | = | `rx.completed` |
+| *→on_hold / →in_progress | lab | ~ EasyRS 自有语义 | ~ E | `rx.on_hold`/`rx.resumed` |
 | *→cancelled | 双方? | 在途/已接单取消的费用后果 ? | ? | `rx.cancelled` |
 | completed→reopened→in_progress | lab+practice | 返工审批 ?（FLOW-017 S） | ? | `rx.reopened` |
+
+V1.1 校准注记（2026-02）：
+- `draft` 对外语义即 EasyRx `Saved`；`submitted`/`checked_in`/`completed`/`shipped`/`received`/`delivered` 词汇均经 SRC01/03/26 正文证实。
+- 下载触发 check-in 为官方行为：lab 侧 `Download`（ZIP 含 PDF+附件）将 Rx 置 Checked-In 并锁定撤回。EasyRS 实现为显式 `download_bundle` 动作，服务端记录 `checked_in_via∈{button,download}`，不做隐藏副作用。
+- `completed` 为套餐门控能力（Premium/Enterprise Check-Out）；免费套餐工作流条跳过 Completed 直接 Shipped。
+- `in_progress` 保留为 EasyRS 自有内部阶段（E），不对应任何已证实的 EasyRx 公开状态；若后续证据出现再校准。
+- `rejected_by_lab→draft` 无证据，维持 `?` + 默认拒绝（SRC23 明确不建议为发通知而撤回）。
 
 **移除出 Rx.status**：`shipped/received/delivered`（迁至 `rx.fulfillment_status` 投影与 `shipment.status` 事实）。理由：临床"处方已完成"与物流"货已交到患者"是两条时间线；把它们塞进同一 status 迫使两个模块共写一列。
 

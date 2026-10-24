@@ -90,11 +90,25 @@
 
 ## 3. 未决问题（V1.1 必答）
 
-1. EasyRx 实际套餐（Free/Connected/Premium/Enterprise?）差异对矩阵的影响（GAP-07）。
-2. practice_staff 可提交 Rx 与否；doctor 可见全所还是仅本人。
-3. 诊所内多 doctor 互相可见性与默认医生规则（IAM-003）。
-4. lab 内角色细分（是否有独立于 admin 的财务/前台角色）。
-5. 诊所发起的 remake 申请与 lab 发起子单的关系（GAP-08）。
-6. tenant_support 的合规边界（是否可触达 PHI）。
+V1.1 核验更新（2026-02，详见 `docs/research/v1.1-permission-matrix.md`）：
+
+1. EasyRx 实际套餐差异对矩阵的影响：部分解明——`Completed`/check-out、invoicing、
+   in-house lab、3D Edit、Written Check-In 均为套餐门控（SRC03/05/06/25/D2 =）。
+   套餐矩阵本身仍 `~`。
+2. ~~practice_staff 可提交 Rx 与否~~ → **已证实**：用户账号授予
+   `Edit Prescriptions` 开关即可创建+编辑处方（SRC-D5 =）；EasyRS 映射为成员级
+   `rx:write`。doctor 仅见本人 Rx 无任何证据 → 维持机构级可见（`?` 保留，
+   可选 `rx_scope=own` 列为 PROVISIONAL 待办）。
+3. 诊所内多 doctor 互相可见性与默认医生规则（IAM-003）：`?` 仍未决。
+4. lab 内角色细分：lab 用户账号存在（SRC-D5），但未见独立财务/前台角色的公开描述
+   → `lab_frontdesk` 维持 `?`/PROVISIONAL。
+5. 诊所 remake 申请与 lab 子单：remake/repair 请求存在（SRC02/SRC-D2 =），
+   子单语义未公开 → `?` 保留，S1b 仅实现 parent_rx_id 关联草稿。
+6. tenant_support 合规边界：EasyRx 内部 SuperAdmin 存在（SRC34 =），PHI 边界属
+   EasyRS 自有合规策略 → 维持最严（默认不可见 PHI，按需授权+审计）。
+
+另证实：仅诊所主账号可发起 lab 连接（SRC-D4 =）；模板共享 Copy/Edit/View 且仅
+所有者可管理权限（SRC33 =）；通知三级 Notify/RequireApproval/EmailOnly 且审批需
+"doctor or authorized signature"（SRC23 =）→ EasyRS 增 `rx:approve` 授权位。
 
 在这些问题被实测回答前，矩阵按**更严格**一侧实现，验收用例固定当前行为。
