@@ -35,3 +35,7 @@ coverage/
 .pytest_cache/
 out/
 .env
+
+# playwright
+test-results/
+playwright-report/
