@@ -85,8 +85,10 @@ async def _add_item(client, rx: dict, code: str = "HWL", **extra) -> dict:
 async def _submit(client, rx: dict, key: str | None = None):
     return await client.post(
         f"/v1/rx/{rx['id']}/submit",
-        json={"note": "for lab", "signature_name": "Dr. Demo"},
-        headers={"Idempotency-Key": key or uuid.uuid4().hex})
+        json={"note": "for lab", "signature_name": "Dr. Demo",
+              "confirm_submit": True},
+        headers={"Idempotency-Key": key or uuid.uuid4().hex,
+                 "If-Match": str(rx["version"])})
 
 
 # ---------------- happy path + core loop --------------------------------------
@@ -113,18 +115,21 @@ async def test_full_loop_submit_checkin_unsubmit_blocked(client):
     await login(client, LAB_TECH)
     inbox = (await client.get("/v1/rx?status=submitted")).json()
     assert rx["id"] in [i["id"] for i in inbox["items"]]
+    cur = (await client.get(f"/v1/rx/{rx['id']}")).json()
     r = await client.post(f"/v1/rx/{rx['id']}/check-in",
-                          json={"note": "received"})
+                          json={"note": "received"},
+                          headers={"If-Match": str(cur["version"])})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "checked_in"
     assert r.json()["checked_in_via"] == "button"
-    # idempotent repeat
+    # idempotent repeat — no second event
     assert (await client.post(
         f"/v1/rx/{rx['id']}/check-in", json={})).status_code == 200
 
     # practice can read, but unsubmit is now forbidden (CONFIRMED rule)
     await login(client, DOCTOR)
-    r = await client.post(f"/v1/rx/{rx['id']}/unsubmit", json={})
+    r = await client.post(f"/v1/rx/{rx['id']}/unsubmit", json={},
+                          headers={"If-Match": str(rx["version"] + 1)})
     assert r.status_code == 409, r.text
     assert r.json()["detail"]["code"] == "already_checked_in"
 
@@ -140,7 +145,8 @@ async def test_unsubmit_before_checkin_returns_to_draft(client):
     rx = await _add_item(client, await _draft(client))
     rx = (await _submit(client, rx)).json()
     r = await client.post(f"/v1/rx/{rx['id']}/unsubmit",
-                          json={"reason": "wrong lab"})
+                          json={"reason": "wrong lab"},
+                          headers={"If-Match": str(rx["version"])})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "draft"
     # editable again
@@ -150,17 +156,19 @@ async def test_unsubmit_before_checkin_returns_to_draft(client):
     assert r.status_code == 200
 
 
-async def test_lab_bundle_download_checks_in(client):
+async def test_lab_bundle_download_checks_in(client, s3ok):
     await login(client, STAFF)
     rx = await _add_item(client, await _draft(client))
     rx = (await _submit(client, rx)).json()
 
     await login(client, LAB_ADMIN)
-    r = await client.get(f"/v1/rx/{rx['id']}/bundle")
-    assert r.status_code == 200
-    assert r.headers["content-type"] == "application/zip"
-    zf = zipfile.ZipFile(io.BytesIO(r.content))
-    assert {"rx.json", "attachments.json"} <= set(zf.namelist())
+    r = await client.post(f"/v1/rx/{rx['id']}/bundle-download")
+    assert r.status_code == 200, r.text
+    import httpx
+    z = await httpx.AsyncClient().get(r.json()["download_url"])
+    assert z.status_code == 200
+    zf = zipfile.ZipFile(io.BytesIO(z.content))
+    assert {"prescription.pdf", "manifest.json"} <= set(zf.namelist())
 
     detail = (await client.get(f"/v1/rx/{rx['id']}")).json()
     assert detail["status"] == "checked_in"
@@ -169,17 +177,19 @@ async def test_lab_bundle_download_checks_in(client):
     assert tr[-1]["via"] == "download"
 
 
-async def test_practice_bundle_download_does_not_check_in(client):
+async def test_practice_bundle_download_does_not_check_in(client, s3ok):
     await login(client, STAFF)
     rx = await _add_item(client, await _draft(client))
     rx = (await _submit(client, rx)).json()
     # practice downloads own bundle — no transition
-    r = await client.get(f"/v1/rx/{rx['id']}/bundle")
+    r = await client.post(f"/v1/rx/{rx['id']}/bundle-download")
     assert r.status_code == 200
     assert (await client.get(f"/v1/rx/{rx['id']}")).json()["status"] == "submitted"
     # and may still unsubmit
+    cur = (await client.get(f"/v1/rx/{rx['id']}")).json()
     assert (await client.post(
-        f"/v1/rx/{rx['id']}/unsubmit", json={})).status_code == 200
+        f"/v1/rx/{rx['id']}/unsubmit", json={},
+        headers={"If-Match": str(cur["version"])})).status_code == 200
 
 
 # ---------------- guards -------------------------------------------------------
@@ -198,8 +208,11 @@ async def test_submit_requires_accepted_connection(client):
 async def test_submit_requires_lab_and_items(client):
     await login(client, STAFF)
     rx = await _draft(client, lab_org_id=None)  # universal-library style
-    r = await client.post(f"/v1/rx/{rx['id']}/submit", json={},
-                          headers={"Idempotency-Key": uuid.uuid4().hex})
+    r = await client.post(
+        f"/v1/rx/{rx['id']}/submit",
+        json={"signature_name": "Dr. D", "confirm_submit": True},
+        headers={"Idempotency-Key": uuid.uuid4().hex,
+                 "If-Match": str(rx["version"])})
     assert r.status_code == 422 and r.json()["detail"]["code"] == "no_lab_selected"
 
     rx = await _draft(client)  # has lab but no items
@@ -219,12 +232,16 @@ async def test_submit_idempotency(client):
     assert r2.status_code == 200 and r2.json()["id"] == rx["id"]
     # same key + different payload -> 409
     r3 = await client.post(
-        f"/v1/rx/{rx['id']}/submit", json={"note": "different"},
-        headers={"Idempotency-Key": key})
+        f"/v1/rx/{rx['id']}/submit",
+        json={"note": "different", "signature_name": "Dr. Demo",
+              "confirm_submit": True},
+        headers={"Idempotency-Key": key, "If-Match": str(rx["version"])})
     assert r3.status_code == 409
     # missing key -> 422
-    assert (await client.post(f"/v1/rx/{rx['id']}/submit",
-                              json={})).status_code == 422
+    assert (await client.post(
+        f"/v1/rx/{rx['id']}/submit",
+        json={"signature_name": "Dr. D", "confirm_submit": True},
+        headers={"If-Match": str(rx["version"])})).status_code == 422
 
 
 async def test_required_part_option_enforced(client):
@@ -233,12 +250,15 @@ async def test_required_part_option_enforced(client):
     rx = await _draft(client)
     band = await _catalog_id(client, "BND")
     r = await client.put(f"/v1/rx/{rx['id']}/items", json={
-        "items": [{"appliance_id": band, "arch": "upper"}]})
+        "items": [{"appliance_id": band, "arch": "upper"}]},
+        headers={"If-Match": str(rx["version"])})
     assert r.status_code == 422
     assert r.json()["detail"]["code"] == "required_option_missing"
+    rx = (await client.get(f"/v1/rx/{rx['id']}")).json()
     r = await client.put(f"/v1/rx/{rx['id']}/items", json={
         "items": [{"appliance_id": band, "arch": "upper",
-                   "options": {"band_tooth": "16"}}]})
+                   "options": {"band_tooth": "16"}}]},
+        headers={"If-Match": str(rx["version"])})
     assert r.status_code == 200, r.text
 
 
@@ -262,7 +282,8 @@ async def test_lab_cannot_issue_or_practice_actions(client):
     rx = (await _submit(client, rx)).json()
     await login(client, LAB_ADMIN)
     assert (await client.post(
-        f"/v1/rx/{rx['id']}/unsubmit", json={})).status_code == 403
+        f"/v1/rx/{rx['id']}/unsubmit", json={},
+        headers={"If-Match": "1"})).status_code == 403
     assert (await client.patch(
         f"/v1/rx/{rx['id']}", json={"notes": "x"})).status_code == 403
 
@@ -271,7 +292,8 @@ async def test_practice_cannot_check_in(client):
     await login(client, STAFF)
     rx = await _add_item(client, await _draft(client))
     rx = (await _submit(client, rx)).json()
-    r = await client.post(f"/v1/rx/{rx['id']}/check-in", json={})
+    r = await client.post(f"/v1/rx/{rx['id']}/check-in", json={},
+                          headers={"If-Match": str(rx["version"])})
     assert r.status_code == 403
 
 
@@ -302,7 +324,8 @@ async def test_other_lab_and_foreign_tenant_isolated(client, admindb):
     await login(client, "lab2@lb.dev")
     assert (await client.get(f"/v1/rx/{rx['id']}")).status_code == 403
     assert (await client.post(
-        f"/v1/rx/{rx['id']}/check-in", json={})).status_code == 403
+        f"/v1/rx/{rx['id']}/check-in", json={},
+        headers={"If-Match": "1"})).status_code == 403
 
 
 async def test_version_conflict_and_rx_history(client):
@@ -358,6 +381,9 @@ async def test_attach_asset_and_lab_reads_it(client, s3ok):
     r = await client.post(f"/v1/assets/{asset['id']}/download", json={})
     assert r.status_code == 200, r.text
     # and bundle lists it
-    zf = zipfile.ZipFile(io.BytesIO(
-        (await client.get(f"/v1/rx/{rx['id']}/bundle")).content))
-    assert asset["id"] in zf.read("attachments.json").decode()
+    r = await client.post(f"/v1/rx/{rx['id']}/bundle-download")
+    assert r.status_code == 200, r.text
+    import httpx as _h
+    z = await _h.AsyncClient().get(r.json()["download_url"])
+    zf = zipfile.ZipFile(io.BytesIO(z.content))
+    assert asset["id"] in zf.read("manifest.json").decode()

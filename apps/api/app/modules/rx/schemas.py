@@ -28,7 +28,11 @@ class RxUpdate(BaseModel):
 
 class RxSubmit(BaseModel):
     note: str | None = Field(default=None, max_length=500)
-    signature_name: str | None = Field(default=None, max_length=200)
+    # S1b1-03: server-enforced signature confirmation — the typed name is
+    # the business record of who signed; the authenticated user id, org,
+    # UTC time and Rx version are stamped server-side.
+    signature_name: str = Field(min_length=1, max_length=200)
+    confirm_submit: bool = True
 
 
 class RxUnsubmit(BaseModel):
@@ -132,3 +136,14 @@ class CatalogItemOut(BaseModel):
 class AttachmentCreate(BaseModel):
     asset_id: uuid.UUID
     role: str = Field(pattern="^(original|attachment)$")
+
+
+class RxBundleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    rx_id: uuid.UUID
+    rx_version: int
+    sha256: str
+    bytes: int
+    status: str
+    created_at: datetime

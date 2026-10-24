@@ -11,8 +11,8 @@ docs/research/v1.1-rx-rules.md):
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import (CheckConstraint, Date, DateTime, ForeignKey, Integer,
-                        String, Text)
+from sqlalchemy import (BigInteger, CheckConstraint, Date, DateTime,
+                        ForeignKey, Identity, Integer, String, Text)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -104,6 +104,7 @@ class RxItem(Base, IdMixin, CreatedAtMixin):
 class RxTransition(Base, IdMixin, CreatedAtMixin):
     """Append-only status history — auditable transition trail."""
     __tablename__ = "rx_transition"
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     rx_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("rx.id", ondelete="CASCADE"),
@@ -117,6 +118,41 @@ class RxTransition(Base, IdMixin, CreatedAtMixin):
     actor_org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organization.id"))
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class RxBundle(Base, IdMixin, CreatedAtMixin):
+    """A prepared delivery package (S1b.1): ZIP in object storage plus a
+    content hash recorded at build time."""
+    __tablename__ = "rx_bundle"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                                 index=True)
+    rx_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rx.id"), index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id"))
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    rx_version: Mapped[int] = mapped_column(Integer)
+    storage_key: Mapped[str] = mapped_column(String(512), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64))
+    bytes: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(16), default="ready",
+                                        server_default="ready")
+
+
+class IdempotencyRecord(Base, IdMixin, CreatedAtMixin):
+    """First-result snapshot for keyed mutating POSTs (S1b1-04)."""
+    __tablename__ = "idempotency_record"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                                 index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    endpoint: Mapped[str] = mapped_column(String(64))
+    key: Mapped[str] = mapped_column(String(128))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    response_status: Mapped[int] = mapped_column(Integer)
+    response_json: Mapped[dict] = mapped_column(JSONB)
 
 
 class RxComment(Base, IdMixin, CreatedAtMixin):

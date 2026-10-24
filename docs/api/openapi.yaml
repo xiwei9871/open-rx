@@ -514,6 +514,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RxId"
         - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: false
         content:
@@ -533,17 +534,33 @@ paths:
   /rx/{rxId}/bundle:
     get:
       tags: [prescriptions]
-      operationId: downloadRxBundle
-      summary: "Rx ZIP bundle — lab-side download performs check-in (CONFIRMED SRC03); practice-side download does not transition"
-      x-state-transition: "submitted -> checked_in (via=download), lab side only"
+      operationId: listRxBundles
+      summary: "List prepared delivery bundles — pure read, never transitions (safe for browser prefetch)"
       x-scope: issuing practice member | receiving lab member
       parameters: [$ref: "#/components/parameters/RxId"]
       responses:
         "200":
-          description: "application/zip — rx.json + attachments.json"
-          content: {application/zip: {schema: {type: string, format: binary}}}
+          description: "Bundle metadata"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/RxBundle"}}}}}}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
+  /rx/{rxId}/bundle-download:
+    post:
+      tags: [prescriptions]
+      operationId: downloadRxBundle
+      summary: "Accept the delivery bundle — builds+verifies the ZIP (prescription.pdf, manifest.json, attachments/*) and returns a short-lived URL; for the addressed lab on a submitted Rx this IS check-in (CONFIRMED SRC03)"
+      x-state-transition: "submitted -> checked_in (via=download), lab side only; build failure leaves Rx untouched"
+      x-idempotent: "repeat for same rx_version reuses the ready bundle — no duplicate package or second check-in event"
+      x-scope: issuing practice member | receiving lab member
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Bundle + presigned download URL"
+          content: {application/json: {schema: {type: object, properties: {bundle: {$ref: "#/components/schemas/RxBundle"}, download_url: {type: string, format: uri}, expires_in: {type: integer}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+        "502": {description: "bundle build/verification or storage failed — Rx state unchanged"}
   /rx/{rxId}/transitions:
     get:
       tags: [prescriptions]
@@ -1448,10 +1465,12 @@ components:
         notes: {type: [string, "null"]}
     RxSubmit:
       type: object
-      description: "Optional overrides; primary semantics via headers (Idempotency-Key, If-Match)"
+      description: "Signature gate (S1b1-03): signature_name + confirm_submit are server-enforced; the server stamps signer user/org/UTC/rx-version"
+      required: [signature_name, confirm_submit]
       properties:
         note: {type: [string, "null"], description: "submission note to lab"}
-        signature_name: {type: [string, "null"], description: "typed e-signature name"}
+        signature_name: {type: string, minLength: 1, description: "typed e-signature name — whitespace-only rejected"}
+        confirm_submit: {type: boolean, description: "explicit confirmation — must be true"}
     RxItem:
       type: object
       required: [id, appliance_id, arch]
@@ -1504,6 +1523,17 @@ components:
           description: "see state-machines.md §1; unknown transitions rejected"
         expected_version: {type: integer, minimum: 0}
         reason: {type: [string, "null"], description: "required for cancel|reopen|on_hold"}
+    RxBundle:
+      type: object
+      required: [id, rx_id, rx_version, sha256, bytes, status, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        rx_id: {type: string, format: uuid}
+        rx_version: {type: integer, description: "rx version the package was built from"}
+        sha256: {type: string, description: "SHA-256 of the ZIP"}
+        bytes: {type: integer}
+        status: {type: string, enum: [ready, failed]}
+        created_at: {type: string, format: date-time}
     RxPdf:
       type: object
       required: [id, rx_id, version, created_at]

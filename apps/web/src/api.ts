@@ -413,31 +413,48 @@ export async function replaceRxItems(id: string, version: number, items: {
   return r.items;
 }
 
-export async function submitRx(id: string, signatureName: string,
+export async function submitRx(id: string, version: number,
+                               signatureName: string,
                                note?: string): Promise<Rx> {
   return req(RxSchema, `/api/v1/rx/${id}/submit`, {
     method: "POST",
-    headers: { ...JSON_HEADERS, "Idempotency-Key": crypto.randomUUID() },
-    body: JSON.stringify({ note: note ?? null, signature_name: signatureName }),
+    headers: { ...JSON_HEADERS, "If-Match": String(version),
+               "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ note: note ?? null,
+                           signature_name: signatureName,
+                           confirm_submit: true }),
   });
 }
 
-export async function unsubmitRx(id: string, reason?: string): Promise<Rx> {
+export async function unsubmitRx(id: string, version: number,
+                                 reason?: string): Promise<Rx> {
   return req(RxSchema, `/api/v1/rx/${id}/unsubmit`, {
-    method: "POST", headers: JSON_HEADERS,
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
     body: JSON.stringify({ reason: reason ?? null }),
   });
 }
 
-export async function checkInRx(id: string, note?: string): Promise<Rx> {
+export async function checkInRx(id: string, version: number,
+                                note?: string): Promise<Rx> {
   return req(RxSchema, `/api/v1/rx/${id}/check-in`, {
-    method: "POST", headers: JSON_HEADERS,
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
     body: JSON.stringify({ note: note ?? null }),
   });
 }
 
-export function rxBundleUrl(id: string): string {
-  return `/api/v1/rx/${id}/bundle`;
+const BundleDownloadSchema = z.object({
+  bundle: z.object({ id: z.string(), sha256: z.string(),
+                     bytes: z.number(), rx_version: z.number() }),
+  download_url: z.string(),
+  expires_in: z.number(),
+});
+
+export async function downloadRxBundle(
+    id: string): Promise<z.infer<typeof BundleDownloadSchema>> {
+  return req(BundleDownloadSchema, `/api/v1/rx/${id}/bundle-download`, {
+    method: "POST", headers: JSON_HEADERS });
 }
 
 export async function listRxComments(id: string): Promise<RxComment[]> {

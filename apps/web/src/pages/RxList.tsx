@@ -33,11 +33,11 @@ export default function RxList({ me, onOpen, onNew }: {
   }
   useEffect(() => { void reload(filter); }, [filter]);
 
-  async function onCheckIn(e: React.MouseEvent, id: string) {
+  async function onCheckIn(e: React.MouseEvent, id: string, version: number) {
     e.stopPropagation();
     setErr("");
     try {
-      await checkInRx(id);
+      await checkInRx(id, version);
       await reload(filter);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
@@ -90,7 +90,7 @@ export default function RxList({ me, onOpen, onNew }: {
               {isLab && (
                 <td style={td}>
                   {r.status === "submitted" && (
-                    <button onClick={(e) => onCheckIn(e, r.id)}>Check in</button>
+                    <button onClick={(e) => onCheckIn(e, r.id, r.version)}>Check in</button>
                   )}
                 </td>
               )}

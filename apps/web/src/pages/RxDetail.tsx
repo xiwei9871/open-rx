@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  checkInRx, createRxComment, getRx, listCatalog, listRxComments,
-  listRxTransitions, replaceRxItems, rxBundleUrl, submitRx, unsubmitRx,
+  checkInRx, createRxComment, downloadRxBundle, getRx, listCatalog,
+  listRxComments, listRxTransitions, replaceRxItems, submitRx, unsubmitRx,
   updateRx, type CatalogItem, type Me, type Rx, type RxComment,
   type RxTransition,
 } from "../api";
@@ -161,20 +161,29 @@ export default function RxDetail({ me, rxId, onBack }: {
                    placeholder="Type full name to sign" />
           </label>
           <button onClick={() => act(
-            () => submitRx(rx.id, sig || me.display_name),
+            () => submitRx(rx.id, rx.version, sig || me.display_name),
             "Submitted to lab")}>Sign &amp; Submit</button>
         </>}
         {!isLab && (rx.status === "submitted" || rx.status === "checked_in") && (
           <button onClick={() => act(
-            () => unsubmitRx(rx.id, "pulled back by practice").then(() => undefined),
+            () => unsubmitRx(rx.id, rx.version,
+                             "pulled back by practice").then(() => undefined),
             "Returned to draft")}>Unsubmit</button>
         )}
         {isLab && rx.status === "submitted" && (
           <button onClick={() => act(
-            () => checkInRx(rx.id, "received at bench"),
+            () => checkInRx(rx.id, rx.version, "received at bench"),
             "Checked in")}>Check in</button>
         )}
-        <a href={rxBundleUrl(rx.id)} download>Download bundle</a>
+        {rx.status !== "draft" && (
+          <button onClick={() => act(async () => {
+            const b = await downloadRxBundle(rx.id);
+            window.open(b.download_url, "_blank", "noopener");
+          }, "Bundle ready — download started")}>
+            {isLab && rx.status === "submitted"
+              ? "Download & Check-in" : "Download bundle"}
+          </button>
+        )}
       </div>
 
       <h3>Comments</h3>

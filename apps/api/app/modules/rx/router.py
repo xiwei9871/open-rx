@@ -12,15 +12,15 @@ Transitions (all row-locked, all recorded in rx_transition + audit):
 Lab-side bundle download IS a check-in act (SRC03, V-02) — checked_in_via
 records which path fired.
 """
+import asyncio
 import base64
 import hashlib
-import io
 import json
+import os
 import uuid
-import zipfile
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,13 +30,14 @@ from app.deps import (Db, Me, Principal, _deny, limit_writes, require_perm,
 from app.modules.clinical.models import Patient, TreatmentCase
 from app.modules.iam.models import (Location, OrgConnection, Organization,
                                     RosterMember)
-from app.modules.rx.models import (CatalogItem, Rx, RxComment, RxItem,
-                                   RxTransition)
+from app.storage import s3, s3_presign
+from app.modules.rx.models import (CatalogItem, IdempotencyRecord, Rx,
+                                   RxBundle, RxComment, RxItem, RxTransition)
 from app.modules.rx.schemas import (AttachmentCreate, CatalogItemOut,
-                                    CommentCreate, CommentOut, RxCheckIn,
-                                    RxCreate, RxItemOut, RxItemsReplace,
-                                    RxOut, RxSubmit, RxTransitionOut,
-                                    RxUnsubmit, RxUpdate)
+                                    CommentCreate, CommentOut, RxBundleOut,
+                                    RxCheckIn, RxCreate, RxItemOut,
+                                    RxItemsReplace, RxOut, RxSubmit,
+                                    RxTransitionOut, RxUnsubmit, RxUpdate)
 
 router = APIRouter(tags=["prescriptions"])
 
@@ -83,6 +84,17 @@ async def _rx_for_lab_write(db: AsyncSession, p: Principal,
 def _vconflict() -> HTTPException:
     return HTTPException(status_code=409, detail={
         "code": "version_conflict", "message": "Rx changed; reload"})
+
+
+def _require_if_match(if_match: int | None, version: int) -> None:
+    """Optimistic-locking gate (S1b1-04): mutating endpoints REQUIRE the
+    client's last-seen version. Missing -> 428, stale -> 409."""
+    if if_match is None:
+        raise HTTPException(status_code=428, detail={
+            "code": "precondition_required",
+            "message": "If-Match header required"})
+    if if_match != version:
+        raise _vconflict()
 
 
 def _illegal(msg: str) -> HTTPException:
@@ -262,10 +274,9 @@ async def update_rx(rx_id: uuid.UUID, body: RxUpdate, request: Request,
                     if_match: int | None = Header(default=None)):
     await limit_writes(p)
     rx = await _rx_for_practice_write(db, p, rx_id, request)
+    _require_if_match(if_match, rx.version)
     if rx.status != "draft":
         raise _illegal("Only draft (Saved) prescriptions can be edited")
-    if if_match is not None and if_match != rx.version:
-        raise _vconflict()
     data = body.model_dump(exclude_unset=True)
     if "lab_org_id" in data and data["lab_org_id"]:
         await _validate_lab(db, p, data["lab_org_id"], request)
@@ -298,10 +309,9 @@ async def replace_rx_items(rx_id: uuid.UUID, body: RxItemsReplace,
                            if_match: int | None = Header(default=None)):
     await limit_writes(p)
     rx = await _rx_for_practice_write(db, p, rx_id, request)
+    _require_if_match(if_match, rx.version)
     if rx.status != "draft":
         raise _illegal("Items can only be changed while status=draft")
-    if if_match is not None and if_match != rx.version:
-        raise _vconflict()
     ids = {i.appliance_id for i in body.items}
     cat = (await db.execute(
         select(CatalogItem).where(CatalogItem.id.in_(ids or {uuid.uuid4()}),
@@ -350,7 +360,7 @@ async def replace_rx_items(rx_id: uuid.UUID, body: RxItemsReplace,
 
 @router.post("/rx/{rx_id}/submit", operation_id="submitRx")
 async def submit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
-                    body: RxSubmit | None = None,
+                    body: RxSubmit,
                     _g=Depends(require_perm("rx:write")),
                     idempotency_key: str | None = Header(default=None),
                     if_match: int | None = Header(default=None)):
@@ -359,21 +369,30 @@ async def submit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
         raise HTTPException(status_code=422, detail={
             "code": "validation_failed",
             "message": "Idempotency-Key header required"})
+    # S1b1-03 signature gate — validated BEFORE any state work so a rejected
+    # submit leaves no transition, no audit row, no idempotency record.
+    if not body.signature_name or not body.signature_name.strip():
+        raise HTTPException(status_code=422, detail={
+            "code": "signature_required",
+            "message": "A non-empty signature_name is required to submit"})
+    if not body.confirm_submit:
+        raise HTTPException(status_code=422, detail={
+            "code": "confirmation_required",
+            "message": "confirm_submit must be true to submit"})
+    ph = _payload_hash(rx_id, body.model_dump(), if_match)
+    # Replay short-circuit: first result wins, later state never leaks back.
+    prior = (await db.execute(select(IdempotencyRecord).where(
+        IdempotencyRecord.key == idempotency_key))).scalar_one_or_none()
+    if prior:
+        if prior.request_hash != ph or prior.org_id != p.org.id:
+            raise HTTPException(status_code=409, detail={
+                "code": "idempotency_payload_mismatch",
+                "message": "Idempotency-Key reuse with different payload"})
+        return prior.response_json
     rx = await _rx_for_practice_write(db, p, rx_id, request)
-    body = body or RxSubmit()
-    # Hash the request payload only — replay must match even after the
-    # version bump from the first successful submit.
-    ph = _payload_hash(rx_id, body.model_dump())
-    if rx.submit_idem_key == idempotency_key:
-        if rx.submit_idem_hash == ph:
-            return await _rx_out(db, rx)  # replay -> first result
-        raise HTTPException(status_code=409, detail={
-            "code": "idempotency_payload_mismatch",
-            "message": "Idempotency-Key reuse with different payload"})
+    _require_if_match(if_match, rx.version)
     if rx.status != "draft":
         raise _illegal("Only draft (Saved) prescriptions can be submitted")
-    if if_match is not None and if_match != rx.version:
-        raise _vconflict()
     if rx.lab_org_id is None:
         raise HTTPException(status_code=422, detail={
             "code": "no_lab_selected",
@@ -393,20 +412,27 @@ async def submit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
         raise HTTPException(status_code=422, detail={
             "code": "validation_failed",
             "message": "At least one part/appliance is required"})
+    signed_version = rx.version  # the version the signature binds
     rx.status = "submitted"
     rx.submitted_at = datetime.now(UTC)
     rx.submitted_by_user_id = p.user.id
-    rx.signature_name = body.signature_name
-    rx.submit_idem_key = idempotency_key
-    rx.submit_idem_hash = ph
+    rx.signature_name = body.signature_name.strip()
     rx.version += 1
     _record_transition(db, p, rx, "draft", "submitted", via="button",
                        note=body.note)
     record(db, action="rx.submitted", object_type="rx", object_id=rx.id,
            tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
-           request=request, after={"lab_org_id": str(rx.lab_org_id)})
+           request=request,
+           after={"lab_org_id": str(rx.lab_org_id),
+                  "signature_name": rx.signature_name,
+                  "signed_rx_version": signed_version})
+    out = await _rx_out(db, rx)
+    db.add(IdempotencyRecord(
+        tenant_id=p.tenant_id, org_id=p.org.id, user_id=p.user.id,
+        endpoint="submitRx", key=idempotency_key, request_hash=ph,
+        response_status=200, response_json=out))
     await tenant_commit(db, p)
-    return await _rx_out(db, rx)
+    return out
 
 
 @router.post("/rx/{rx_id}/unsubmit", operation_id="unsubmitRx")
@@ -416,6 +442,7 @@ async def unsubmit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
                       if_match: int | None = Header(default=None)):
     await limit_writes(p)
     rx = await _rx_for_practice_write(db, p, rx_id, request)
+    _require_if_match(if_match, rx.version)
     # CONFIRMED rule (SRC03): a checked-in Rx cannot be pulled back.
     if rx.status == "checked_in" or rx.checked_in_at is not None:
         raise HTTPException(status_code=409, detail={
@@ -424,8 +451,6 @@ async def unsubmit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
                        "it can no longer be unsubmitted"})
     if rx.status != "submitted":
         raise _illegal("Only submitted prescriptions can be unsubmitted")
-    if if_match is not None and if_match != rx.version:
-        raise _vconflict()
     rx.status = "draft"
     rx.submitted_at = None
     rx.submitted_by_user_id = None
@@ -445,11 +470,13 @@ async def unsubmit_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
 async def check_in_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
                       body: RxCheckIn | None = None,
                       _g=Depends(require_perm("rx:write")),
-                      idempotency_key: str | None = Header(default=None)):
+                      idempotency_key: str | None = Header(default=None),
+                      if_match: int | None = Header(default=None)):
     await limit_writes(p)
     rx = await _rx_for_lab_write(db, p, rx_id, request)
     if rx.status == "checked_in":
-        return await _rx_out(db, rx)  # idempotent repeat
+        return await _rx_out(db, rx)  # idempotent repeat — no second event
+    _require_if_match(if_match, rx.version)
     if rx.status != "submitted":
         raise _illegal("Only submitted prescriptions can be checked in")
     _apply_checkin(db, p, rx, via="button", note=(body or RxCheckIn()).note)
@@ -468,42 +495,120 @@ def _apply_checkin(db: AsyncSession, p: Principal, rx: Rx, via: str,
                        note=note)
 
 
-@router.get("/rx/{rx_id}/bundle", operation_id="downloadRxBundle")
+@router.get("/rx/{rx_id}/bundle", response_model=dict,
+            operation_id="listRxBundles")
+async def list_rx_bundles(rx_id: uuid.UUID, request: Request, db: Db,
+                          p: Me, _g=Depends(require_perm("rx:read"))):
+    """Read-only list of prepared delivery bundles. No state change —
+    safe for browser prefetch (S1b1-02)."""
+    rx = await _rx_for_read(db, p, rx_id, request)
+    rows = (await db.execute(
+        select(RxBundle).where(RxBundle.rx_id == rx.id,
+                               RxBundle.status == "ready")
+        .order_by(RxBundle.created_at.desc()))).scalars().all()
+    return {"items": [RxBundleOut.model_validate(b) for b in rows]}
+
+
+_BUNDLE_URL_TTL = 900
+
+
+@router.post("/rx/{rx_id}/bundle-download", operation_id="downloadRxBundle")
 async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
-                             p: Me, _g=Depends(require_perm("rx:read"))):
-    """Rx ZIP bundle. CONFIRMED (SRC03): a lab-side download of the Rx
-    bundle IS a check-in — status moves submitted -> checked_in with
-    checked_in_via='download'. Practice-side downloads do not transition."""
+                             p: Me, _g=Depends(require_perm("rx:write"))):
+    """Two-phase delivery (S1b1-02):
+    Phase A — build+verify the ZIP outside any state transition. Any
+              storage/hash failure aborts BEFORE the Rx row is touched.
+    Phase B — atomically persist the bundle record; for a lab caller on a
+              submitted Rx this IS the check-in act (SRC03:
+              checked_in_via='download'). Practice callers never trigger
+              check-in. Repeat calls reuse the ready bundle for the same
+              Rx version — no duplicate package or second check-in event.
+    Returns a short-lived presigned URL; the actual byte fetch is a pure
+    GET against object storage."""
+    await limit_writes(p)
+    from app.config import get_settings
+    from app.modules.rx.bundle import (BundleError, build_bundle,
+                                       bundle_key)
     rx = await db.get(Rx, rx_id, with_for_update=True)
     if not rx or rx.tenant_id != p.tenant_id or not _is_party(p, rx):
         await _deny(db, request, p, "rx_not_visible")
-    if rx.status == "submitted" and rx.lab_org_id == p.org.id:
-        _apply_checkin(db, p, rx, via="download",
-                       note="bundle download auto check-in")
-        record(db, action="rx.checked_in", object_type="rx", object_id=rx.id,
-               tenant_id=p.tenant_id, org_id=p.org.id,
+    if rx.status == "draft":
+        raise _illegal("Draft prescriptions have no delivery bundle")
+
+    # Content-version reuse: every content mutation (items, fields,
+    # attachments) bumps rx.version; a check-in bumps it exactly once
+    # without changing deliverable content. A ready bundle built at
+    # version v or v-1 therefore still describes the same package.
+    existing = (await db.execute(select(RxBundle).where(
+        RxBundle.rx_id == rx.id, RxBundle.status == "ready",
+        RxBundle.rx_version >= rx.version - 1)
+        .order_by(RxBundle.created_at.desc()))).scalars().first()
+    s = get_settings()
+    created_new = False
+
+    if existing is None:
+        # Phase A — build outside the state transition.
+        try:
+            path, sha, size, _manifest = await build_bundle(db, rx)
+        except BundleError as e:
+            raise HTTPException(status_code=502, detail={
+                "code": "bundle_build_failed", "message": str(e)})
+        bundle_id = uuid.uuid4()
+        key = bundle_key(p.tenant_id, rx.id, bundle_id)
+        try:
+            with open(path, "rb") as fh:
+                await asyncio.to_thread(
+                    s3().put_object, Bucket=s.s3_bucket, Key=key, Body=fh)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail={
+                "code": "bundle_upload_failed",
+                "message": f"delivery package could not be stored: {e}"})
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        existing = RxBundle(
+            tenant_id=p.tenant_id, rx_id=rx.id, org_id=p.org.id,
+            created_by_user_id=p.user.id, rx_version=rx.version,
+            storage_key=key, sha256=sha, bytes=size, status="ready")
+        db.add(existing)
+        await db.flush()
+        created_new = True
+
+    # Phase B — atomic state work in the same transaction. If the commit
+    # fails, delete the object we just uploaded so storage never claims a
+    # delivery the database did not record.
+    try:
+        if rx.status == "submitted" and rx.lab_org_id == p.org.id:
+            _apply_checkin(db, p, rx, via="download",
+                           note="bundle download accepted check-in")
+            record(db, action="rx.checked_in", object_type="rx",
+                   object_id=rx.id, tenant_id=p.tenant_id, org_id=p.org.id,
+                   actor_user_id=p.user.id, request=request,
+                   after={"via": "download", "bundle_id": str(existing.id)})
+        record(db, action="rx.bundle_downloaded", object_type="rx",
+               object_id=rx.id, tenant_id=p.tenant_id, org_id=p.org.id,
                actor_user_id=p.user.id, request=request,
-               after={"via": "download"})
+               after={"bundle_id": str(existing.id),
+                      "sha256": existing.sha256})
         await tenant_commit(db, p)
-    payload = await _rx_out(db, rx)
-    from app.modules.assets.models import Asset, FileReference
-    refs = (await db.execute(
-        select(FileReference, Asset)
-        .join(Asset, Asset.id == FileReference.asset_id)
-        .where(FileReference.subject_type == "rx",
-               FileReference.subject_id == rx.id,
-               FileReference.revoked_at.is_(None)))).all()
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("rx.json", json.dumps(payload, indent=2))
-        z.writestr("attachments.json", json.dumps([
-            {"asset_id": str(a.id), "kind": a.kind, "jaw": a.jaw,
-             "sha256": a.sha256, "bytes": a.bytes, "role": r.role}
-            for r, a in refs], indent=2))
-    return Response(
-        content=buf.getvalue(), media_type="application/zip",
-        headers={"Content-Disposition":
-                 f'attachment; filename="{rx.rx_number}.zip"'})
+    except Exception:
+        if created_new:
+            try:
+                await asyncio.to_thread(
+                    s3().delete_object, Bucket=s.s3_bucket,
+                    Key=existing.storage_key)
+            except Exception:
+                pass
+        raise
+
+    url = await asyncio.to_thread(
+        s3_presign().generate_presigned_url, "get_object",
+        Params={"Bucket": s.s3_bucket, "Key": existing.storage_key},
+        ExpiresIn=_BUNDLE_URL_TTL)
+    return {"bundle": RxBundleOut.model_validate(existing),
+            "download_url": url, "expires_in": _BUNDLE_URL_TTL}
 
 
 @router.post("/rx/{rx_id}/attachments", status_code=201,
@@ -542,6 +647,7 @@ async def attach_to_rx(rx_id: uuid.UUID, body: AttachmentCreate,
         subject_id=rx.id, role=body.role, granted_by_org_id=p.org.id,
         granted_by_user_id=p.user.id)
     db.add(ref)
+    rx.version += 1  # content change -> optimistic-lock bump (bundle reuse)
     await db.flush()
     record(db, action="rx.attachment_added", object_type="rx",
            object_id=rx.id, tenant_id=p.tenant_id, org_id=p.org.id,
@@ -597,7 +703,7 @@ async def list_rx_transitions(rx_id: uuid.UUID, request: Request, db: Db,
     await _rx_for_read(db, p, rx_id, request)
     rows = (await db.execute(
         select(RxTransition).where(RxTransition.rx_id == rx_id)
-        .order_by(RxTransition.created_at))).scalars().all()
+        .order_by(RxTransition.seq))).scalars().all()
     return {"items": [RxTransitionOut.model_validate(t) for t in rows]}
 
 

@@ -27,6 +27,7 @@ REQUIRED_SPEC_OPS = {
     # S1b-Core: rx lifecycle loop
     "listRx", "createRx", "getRx", "updateRx", "replaceRxItems",
     "submitRx", "unsubmitRx", "checkInRx", "downloadRxBundle",
+    "listRxBundles",
     "attachToRx", "listRxComments", "createRxComment", "listRxTransitions",
     "patientRxHistory", "listParts", "listAppliances",
 }

@@ -70,6 +70,38 @@ test.describe("rx core loop", () => {
     await expect(page.getByRole("heading", { name: /— Checked-In/ })).toBeVisible();
   });
 
+  test("lab download triggers check-in (S1b.1 bundle flow)", async ({ page }) => {
+    // practice: create + submit
+    await signIn(page, PRACTICE.email, PRACTICE.password);
+    await page.getByRole("button", { name: "Prescriptions" }).click();
+    await page.getByRole("button", { name: "New Rx" }).click();
+    await selectByText(page, "Patient", "Synthetic, Ava");
+    await selectByText(page, "Laboratory", "Friendly Lab");
+    await selectByText(page, "catalog", "Adams clasp");
+    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await page.getByLabel("Signature").fill("Dr. Demo");
+    await page.getByRole("button", { name: "Sign & Submit" }).click();
+    await expect(page.getByRole("heading", { name: /— Submitted/ })).toBeVisible();
+    const rxNum = (await page.getByRole("heading", { level: 2 }).innerText())
+      .split(" ")[0];
+
+    // lab: "Download & Check-in" — the POST prepares the bundle and checks
+    // in atomically; the presigned URL opens in a new tab for the GET fetch.
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await signIn(page, LAB.email, LAB.password);
+    await page.getByRole("cell", { name: rxNum }).click();
+    await expect(page.getByRole("heading", { name: /— Submitted/ })).toBeVisible();
+    const popup = page.waitForEvent("popup", { timeout: 5000 }).catch(() => null);
+    await page.getByRole("button", { name: "Download & Check-in" }).click();
+    const tab = await popup;
+    if (tab) await tab.close();
+    await expect(page.getByRole("heading", { name: /— Checked-In/ })).toBeVisible();
+    await expect(page.getByText(/via download/)).toBeVisible();
+    // transition trail records the download check-in
+    await expect(page.getByText(/submitted → checked_in/)).toBeVisible();
+  });
+
   test("unsubmit before check-in returns to Saved", async ({ page }) => {
     await signIn(page, PRACTICE.email, PRACTICE.password);
     await page.getByRole("button", { name: "Prescriptions" }).click();
