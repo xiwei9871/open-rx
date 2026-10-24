@@ -105,6 +105,34 @@ async def seed() -> None:
                 opened_by_user_id=doctor.id,
                 opened_at=datetime.now(UTC)))
 
+        # S1b: universal catalog (synthetic, EasyRS-owned names — no EasyRx
+        # proprietary library content).
+        from app.modules.rx.models import CatalogItem
+        CATALOG = [
+            ("part", "LB", "Labial bow", "wire"),
+            ("part", "AD", "Adams clasp", "retention"),
+            ("part", "BC", "Ball clasp", "retention"),
+            ("part", "EXP", "Expansion screw", "screw"),
+            ("part", "RPE", "RPE screw", "screw"),
+            # BND demonstrates the confirmed "required part options" rule
+            # (V1.1 / 2023 release note: Prompt for Bands before submit).
+            ("part", "BND", "Molar band", "band"),
+            ("appliance", "HWL", "Hawley retainer", "retainer"),
+            ("appliance", "RPN", "Rapid palatal expander", "expander"),
+            ("appliance", "SPL", "Essix splint", "splint"),
+            ("appliance", "ALN", "Aligner set", "aligner"),
+        ]
+        for kind, code, name, cat in CATALOG:
+            if not (await db.execute(select(CatalogItem).where(
+                    CatalogItem.tenant_id == tenant.id,
+                    CatalogItem.code == code,
+                    CatalogItem.owner_org_id.is_(None)))).scalar_one_or_none():
+                db.add(CatalogItem(
+                    tenant_id=tenant.id, owner_org_id=None, kind=kind,
+                    code=code, name=name, category=cat,
+                    option_schema=({"required": ["band_tooth"]}
+                                   if code == "BND" else None)))
+
         await db.commit()
         print(f"seed ok: tenant={tenant.id} PA={orgs['PA'].id} "
               f"LA={orgs['LA'].id} LB={orgs['LB'].id}")

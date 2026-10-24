@@ -60,7 +60,17 @@ async def _subject_owned(db: AsyncSession, p: Principal,
         row = await db.get(TreatmentCase, subject_id)
         return bool(row and row.org_id == p.org.id
                     and row.tenant_id == p.tenant_id)
-    return False  # rx/notification/order — no such entities yet
+    if subject_type == "rx":
+        from app.modules.rx.models import Rx
+        from app.modules.rx.router import LAB_VISIBLE_STATUSES
+        row = await db.get(Rx, subject_id)
+        if not row or row.tenant_id != p.tenant_id:
+            return False
+        if row.practice_org_id == p.org.id:
+            return True
+        return (row.lab_org_id == p.org.id
+                and row.status in LAB_VISIBLE_STATUSES)
+    return False  # notification/order — no such entities yet
 
 
 async def _asset_visible(db: AsyncSession, p: Principal, asset: Asset) -> bool:

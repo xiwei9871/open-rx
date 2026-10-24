@@ -114,17 +114,13 @@ const JSON_HEADERS = {
 async function req<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { credentials: "include", ...init });
   if (!r.ok) {
-    if (r.status === 409) {
-      try {
-        const d = await r.json();
-        if (d?.detail?.code === "possible_duplicate") {
-          throw new DuplicateError(d.detail.candidates ?? []);
-        }
-      } catch (e) {
-        if (e instanceof DuplicateError) throw e;
-      }
+    // Parse the body once — re-reading a consumed stream silently drops the
+    // server's detail.message and degrades to "HTTP <status>".
+    const d = await r.json().catch(() => null);
+    if (d?.detail?.code === "possible_duplicate") {
+      throw new DuplicateError(d.detail.candidates ?? []);
     }
-    throw new ApiError(r.status, await safeDetail(r));
+    throw new ApiError(r.status, d?.detail?.message ?? `HTTP ${r.status}`);
   }
   return schema.parse(await r.json());
 }
@@ -281,4 +277,201 @@ export async function downloadUrl(assetId: string): Promise<string> {
     method: "POST", headers: JSON_HEADERS, body: "{}",
   });
   return r.url;
+}
+
+// ---------- prescriptions (S1b-Core) ----------
+const RxItemSchema = z.object({
+  id: z.string(),
+  appliance_id: z.string(),
+  arch: z.string(),
+  tooth_ops: z.array(z.any()),
+  options: z.any().nullable(),
+  qty: z.number(),
+});
+export type RxItem = z.infer<typeof RxItemSchema>;
+
+const RxSchema = z.object({
+  id: z.string(),
+  rx_number: z.string(),
+  patient_id: z.string(),
+  case_id: z.string().nullable(),
+  status: z.string(),
+  fulfillment_status: z.string(),
+  form_type: z.string(),
+  form_payload: z.any().nullable(),
+  due_date: z.string().nullable(),
+  notes: z.string().nullable(),
+  practice_org_id: z.string(),
+  lab_org_id: z.string().nullable(),
+  location_id: z.string().nullable(),
+  doctor_id: z.string().nullable(),
+  checked_in_via: z.string().nullable(),
+  signature_name: z.string().nullable(),
+  version: z.number(),
+  submitted_at: z.string().nullable(),
+  checked_in_at: z.string().nullable(),
+  completed_at: z.string().nullable(),
+  created_at: z.string(),
+  items: z.array(RxItemSchema).optional(),
+});
+export type Rx = z.infer<typeof RxSchema>;
+
+const RxPageSchema = z.object({
+  items: z.array(RxSchema),
+  next_cursor: z.string().nullable(),
+  counts: z.record(z.string(), z.number()),
+});
+
+const CatalogItemSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  category: z.string().nullable(),
+  arch_scope: z.string(),
+  option_schema: z.any().nullable(),
+});
+export type CatalogItem = z.infer<typeof CatalogItemSchema>;
+
+const ConnectionSchema = z.object({
+  id: z.string(),
+  practice_org_id: z.string(),
+  lab_org_id: z.string(),
+  status: z.string(),
+  version: z.number(),
+});
+export type Connection = z.infer<typeof ConnectionSchema>;
+
+const RosterSchema = z.object({
+  id: z.string(),
+  org_id: z.string(),
+  kind: z.string(),
+  display_name: z.string(),
+  is_default: z.boolean(),
+  status: z.string(),
+});
+
+const CommentSchema = z.object({
+  id: z.string(),
+  rx_id: z.string(),
+  body: z.string(),
+  created_at: z.string(),
+  parent_id: z.string().nullable(),
+});
+export type RxComment = z.infer<typeof CommentSchema>;
+
+const TransitionSchema = z.object({
+  id: z.string(),
+  from_status: z.string().nullable(),
+  to_status: z.string(),
+  via: z.string(),
+  note: z.string().nullable(),
+  created_at: z.string(),
+});
+export type RxTransition = z.infer<typeof TransitionSchema>;
+
+export async function listRx(status?: string): Promise<{ items: Rx[]; counts: Record<string, number> }> {
+  const u = status ? `/api/v1/rx?status=${encodeURIComponent(status)}` : "/api/v1/rx";
+  const r = await req(RxPageSchema, u);
+  return { items: r.items, counts: r.counts };
+}
+
+export async function createRx(body: {
+  patient_id: string; lab_org_id?: string | null; doctor_id?: string | null;
+  due_date?: string | null; notes?: string | null;
+}): Promise<Rx> {
+  return req(RxSchema, "/api/v1/rx", {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function getRx(id: string): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}`);
+}
+
+export async function updateRx(id: string, version: number, body: {
+  lab_org_id?: string | null; doctor_id?: string | null;
+  due_date?: string | null; notes?: string | null;
+}): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}`, {
+    method: "PATCH",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function replaceRxItems(id: string, version: number, items: {
+  appliance_id: string; arch: string; options?: Record<string, unknown> | null;
+  tooth_ops?: { tooth: string; op: string; detail?: string | null }[]; qty?: number;
+}[]): Promise<RxItem[]> {
+  const r = await req(z.object({ items: z.array(RxItemSchema) }),
+    `/api/v1/rx/${id}/items`, {
+    method: "PUT",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ items }),
+  });
+  return r.items;
+}
+
+export async function submitRx(id: string, signatureName: string,
+                               note?: string): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}/submit`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ note: note ?? null, signature_name: signatureName }),
+  });
+}
+
+export async function unsubmitRx(id: string, reason?: string): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}/unsubmit`, {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+}
+
+export async function checkInRx(id: string, note?: string): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}/check-in`, {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ note: note ?? null }),
+  });
+}
+
+export function rxBundleUrl(id: string): string {
+  return `/api/v1/rx/${id}/bundle`;
+}
+
+export async function listRxComments(id: string): Promise<RxComment[]> {
+  const r = await req(z.object({ items: z.array(CommentSchema) }),
+    `/api/v1/rx/${id}/comments`);
+  return r.items;
+}
+
+export async function createRxComment(id: string, body: string): Promise<RxComment> {
+  return req(CommentSchema, `/api/v1/rx/${id}/comments`, {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ body }),
+  });
+}
+
+export async function listRxTransitions(id: string): Promise<RxTransition[]> {
+  const r = await req(z.object({ items: z.array(TransitionSchema) }),
+    `/api/v1/rx/${id}/transitions`);
+  return r.items;
+}
+
+export async function listCatalog(kind: "parts" | "appliances"): Promise<CatalogItem[]> {
+  const r = await req(z.object({ items: z.array(CatalogItemSchema) }),
+    `/api/v1/catalog/${kind}`);
+  return r.items;
+}
+
+export async function listConnections(orgId: string): Promise<Connection[]> {
+  const r = await req(z.object({ items: z.array(ConnectionSchema) }),
+    `/api/v1/org-connections?org_id=${orgId}`);
+  return r.items;
+}
+
+export async function listRoster(orgId: string): Promise<z.infer<typeof RosterSchema>[]> {
+  const r = await req(z.object({ items: z.array(RosterSchema) }),
+    `/api/v1/orgs/${orgId}/roster`);
+  return r.items;
 }

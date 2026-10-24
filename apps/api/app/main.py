@@ -10,6 +10,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.iam.router import router as iam_router
 from app.modules.clinical.router import router as clinical_router
 from app.modules.assets.router import router as assets_router
+from app.modules.rx.router import router as rx_router
 
 _s = get_settings()
 
@@ -83,6 +84,7 @@ app.include_router(auth_router, prefix="/v1")
 app.include_router(iam_router, prefix="/v1")
 app.include_router(clinical_router, prefix="/v1")
 app.include_router(assets_router, prefix="/v1")
+app.include_router(rx_router, prefix="/v1")
 
 
 @app.get("/healthz", operation_id="healthz")

@@ -507,7 +507,7 @@ paths:
     post:
       tags: [prescriptions]
       operationId: checkInRx
-      summary: "Lab check-in — explicit act; file download alone does NOT check in"
+      summary: "Lab check-in — explicit act; lab-side bundle download (GET /rx/{rxId}/bundle) also checks in (CONFIRMED SRC03)"
       x-scope: receiving lab member (check-in role)
       x-idempotent: "repeat returns current state"
       x-state-transition: "submitted -> checked_in"
@@ -530,6 +530,33 @@ paths:
         "403": {$ref: "#/components/responses/Forbidden"}
         "409": {$ref: "#/components/responses/VersionConflict"}
         "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/bundle:
+    get:
+      tags: [prescriptions]
+      operationId: downloadRxBundle
+      summary: "Rx ZIP bundle — lab-side download performs check-in (CONFIRMED SRC03); practice-side download does not transition"
+      x-state-transition: "submitted -> checked_in (via=download), lab side only"
+      x-scope: issuing practice member | receiving lab member
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "application/zip — rx.json + attachments.json"
+          content: {application/zip: {schema: {type: string, format: binary}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /rx/{rxId}/transitions:
+    get:
+      tags: [prescriptions]
+      operationId: listRxTransitions
+      summary: "Auditable status trail (append-only)"
+      x-scope: as getRx
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Transition history"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {type: object}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /rx/{rxId}/transition:
     post:
       tags: [prescriptions]
@@ -1369,7 +1396,8 @@ components:
       properties:
         id: {type: string, format: uuid}
         rx_number: {type: string, readOnly: true}
-        case_id: {type: string, format: uuid}
+        patient_id: {type: string, format: uuid}
+        case_id: {type: [string, "null"], format: uuid}
         status:
           type: string
           description: "Clinical lifecycle only — single writer: rx module"
@@ -1382,10 +1410,14 @@ components:
         form_type: {type: string, enum: [standard, aligner, idb]}
         form_payload: {type: object, description: "form-type specific answers; schema per form_type (V1.1 to define)"}
         due_date: {type: [string, "null"], format: date}
+        notes: {type: [string, "null"]}
         practice_org_id: {type: string, format: uuid}
         lab_org_id: {type: [string, "null"], format: uuid}
         location_id: {type: [string, "null"], format: uuid}
         doctor_id: {type: [string, "null"], format: uuid}
+        checked_in_via: {type: [string, "null"], enum: [button, download], readOnly: true, description: "which check-in path fired (SRC03: download IS a check-in)"}
+        signature_name: {type: [string, "null"], description: "typed e-signature captured at submit"}
+        items: {type: array, items: {$ref: "#/components/schemas/RxItem"}, readOnly: true, description: "present on getRx/create/submit responses"}
         version: {type: integer, readOnly: true}
         submitted_at: {type: [string, "null"], format: date-time, readOnly: true}
         checked_in_at: {type: [string, "null"], format: date-time, readOnly: true}
@@ -1402,6 +1434,7 @@ components:
         doctor_id: {type: [string, "null"], format: uuid, description: "roster member; required per roster-required flag"}
         form_type: {type: string, enum: [standard, aligner, idb], default: standard}
         due_date: {type: [string, "null"], format: date}
+        notes: {type: [string, "null"]}
         template_id: {type: [string, "null"], format: uuid, description: "prefill items/annotations from template"}
     RxUpdate:
       type: object
@@ -1418,6 +1451,7 @@ components:
       description: "Optional overrides; primary semantics via headers (Idempotency-Key, If-Match)"
       properties:
         note: {type: [string, "null"], description: "submission note to lab"}
+        signature_name: {type: [string, "null"], description: "typed e-signature name"}
     RxItem:
       type: object
       required: [id, appliance_id, arch]

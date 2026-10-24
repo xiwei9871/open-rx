@@ -24,6 +24,11 @@ REQUIRED_SPEC_OPS = {
     "deletePatient", "listCases", "createCase", "listPatientAssets",
     "declareUpload", "completeUpload", "getAsset", "downloadAsset",
     "grantAssetReference", "revokeAssetReference",
+    # S1b-Core: rx lifecycle loop
+    "listRx", "createRx", "getRx", "updateRx", "replaceRxItems",
+    "submitRx", "unsubmitRx", "checkInRx", "downloadRxBundle",
+    "attachToRx", "listRxComments", "createRxComment", "listRxTransitions",
+    "patientRxHistory", "listParts", "listAppliances",
 }
 EXTRA_AUTH_OPS = {
     "login", "verifyTwoFA", "logout", "me",

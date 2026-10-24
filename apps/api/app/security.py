@@ -69,21 +69,27 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         "connection:write", "audit:read",
         "patient:read", "patient:write", "patient:delete",
         "asset:read", "asset:write", "asset:share",
+        "rx:read", "rx:write",
     }),
     "practice_doctor": frozenset({
         "roster:read",
         "patient:read", "patient:write",
         "asset:read", "asset:write", "asset:share",
+        "rx:read", "rx:write",
     }),
     "practice_staff": frozenset({
         "roster:read",
         "patient:read", "patient:write",
         "asset:read", "asset:write",
+        "rx:read", "rx:write",
     }),
     "lab_admin": frozenset({
         "org:manage", "location:write", "member:write",
         "connection:write", "audit:read",
         "asset:read", "asset:write",
+        "rx:read", "rx:write",
     }),
-    "lab_technician": frozenset({"asset:read"}),
+    # Technicians receive work — check-in is lab-side rx:write (V-03: lab
+    # roles are account-level in EasyRx; finer per-account flags land later).
+    "lab_technician": frozenset({"asset:read", "rx:read", "rx:write"}),
 }
