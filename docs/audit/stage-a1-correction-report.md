@@ -70,11 +70,12 @@
 | OpenAPI lint | `redocly@1.25.15 lint` | 0 error / 36 warning（非 MVP 4xx，符合范围约定） |
 | 契约结构 | `redocly bundle` + `validate_contract.py` | 45/45 MVP ops，0 violations |
 | 秘钥/PHI | CI 内置扫描步骤 | 本地 grep 复查无命中 |
-| 远端 CI | GitHub Actions | 推送后核验（见交付摘要） |
+| 远端 CI | GitHub Actions run 40085471241 | **completed / success**（commit `7dcfc23`，含新契约门） |
 
 ## 8. 遗留与声明
 
-- 远端 GitHub Actions 结果、PR 创建、默认分支切换取决于推送后的 GitHub 侧状态与认证可用性——如实报告，不推断。
+- 远端 CI 已实测：run `40085471241` on `7dcfc23` → **success**（本报告此次追加提交将再触发一轮）。
+- PR 创建与默认分支切换仍需 `gh`/API 认证或手动操作——如实报告，不推断。
 - `x-status: provisional` 的端点仍是占位设计，未固化为承诺行为。
 - ADR-0006 §4 撤销语义为 PROVISIONAL 选择，列入 V-14 待校。
 - 未启动任何业务功能编码；研究基线（167 ID、哈希、审计历史）未变。
