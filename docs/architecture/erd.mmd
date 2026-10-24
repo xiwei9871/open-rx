@@ -1,0 +1,75 @@
+erDiagram
+  TENANT ||--o{ ORGANIZATION : owns
+  ORGANIZATION ||--o{ LOCATION : has
+  ORGANIZATION ||--o{ MEMBERSHIP : grants
+  USER ||--o{ MEMBERSHIP : holds
+  ROLE ||--o{ MEMBERSHIP : assigned
+  ORGANIZATION ||--o{ ROSTER_MEMBER : lists
+  ORGANIZATION ||--o{ ORG_CONNECTION : requests
+  ORGANIZATION ||--o{ ORG_CONNECTION : accepts
+
+  PATIENT ||--o{ TREATMENT_CASE : has
+  TREATMENT_CASE ||--o{ PRESCRIPTION : contains
+  ORGANIZATION ||--o{ PATIENT : registers
+  ORGANIZATION ||--o{ PRESCRIPTION : issues
+  ORGANIZATION ||--o{ PRESCRIPTION : receives
+  LOCATION ||--o{ PRESCRIPTION : site
+  ROSTER_MEMBER ||--o{ PRESCRIPTION : prescribes
+
+  PRESCRIPTION ||--o{ RX_ITEM : specifies
+  PRESCRIPTION ||--o{ RX_ANNOTATION : annotates
+  PRESCRIPTION ||--o{ RX_PDF : renders
+  CATALOG_TEMPLATE ||--o{ PRESCRIPTION : prefill
+  CATALOG_APPLIANCE ||--o{ CATALOG_PART : bundles
+  CATALOG_TEMPLATE }o--o{ ORGANIZATION : shared_with
+
+  PRESCRIPTION ||--o{ FILE_REFERENCE : attaches
+  PATIENT ||--o{ FILE_REFERENCE : attaches
+  FILE_ASSET ||--o{ FILE_REFERENCE : referenced_by
+  FILE_ASSET ||--o{ FILE_ASSET : parent_version
+  UPLOAD_SESSION ||--o{ FILE_ASSET : produces
+
+  PRESCRIPTION ||--o{ RX_COMMENT : discusses
+  PRESCRIPTION ||--o{ CLINICAL_NOTIFICATION : raises
+  CLINICAL_NOTIFICATION ||--o{ APPROVAL : resolves
+  CLINICAL_NOTIFICATION ||--o{ FILE_REFERENCE : concerns
+  USER ||--o{ NOTIFICATION_PREF : configures
+
+  PROCESSING_RECIPE ||--o{ PROCESSING_JOB : configures
+  FILE_ASSET ||--o{ PROCESSING_JOB : input
+  PROCESSING_JOB ||--o{ FILE_ASSET : outputs
+  PROCESSING_JOB ||--o{ QA_REPORT : judged_by
+
+  PRESCRIPTION ||--o{ PRODUCTION_ORDER : creates
+  PRODUCTION_ORDER ||--o{ ORDER_ITEM : contains
+  WORKFLOW ||--o{ ACTIVITY : defines
+  ACTIVITY ||--o{ PRODUCTION_OPTION : offers
+  PRODUCTION_ORDER ||--o{ PRODUCTION_STEP : schedules
+  PRODUCTION_STEP }o--|| PRODUCTION_OPTION : executes_as
+  PRODUCTION_ORDER ||--o{ WORK_TICKET : prints
+  PRODUCTION_ORDER ||--o{ HOLD_EVENT : pauses
+  PRODUCTION_ORDER ||--o{ SERVICE_ORDER : spawns
+  PRODUCTION_ORDER ||--o{ SHIPMENT : dispatches
+  SHIPMENT ||--o{ SHIPMENT_EVENT : tracks
+
+  ORGANIZATION ||--o{ PRICE_LIST : publishes
+  PRICE_LIST ||--o{ PRICE_LIST_ITEM : prices
+  PRODUCTION_ORDER ||--o{ INVOICE : bills
+  PROPOSAL ||--o{ INVOICE : converts
+  INVOICE ||--o{ INVOICE_ITEM : itemizes
+  PAYMENT ||--o{ PAYMENT_ALLOCATION : applies
+  INVOICE ||--o{ PAYMENT_ALLOCATION : settled_by
+  INVOICE ||--o{ ADJUSTMENT : adjusts
+  ORGANIZATION ||--o{ STATEMENT : issues
+
+  ORGANIZATION ||--o{ INTEGRATION_CONNECTION : authorizes
+  INTEGRATION_CONNECTION ||--o{ INBOUND_SCAN_EVENT : yields
+  INBOUND_SCAN_EVENT }o--o| PRESCRIPTION : attaches_to
+  ORGANIZATION ||--o{ DESKTOP_AGENT_SESSION : runs
+  ORGANIZATION ||--o{ WEBHOOK_ENDPOINT : subscribes
+
+  USER ||--o{ AUDIT_EVENT : performs
+  USER ||--o{ E_SIGNATURE : signs
+  FILE_ASSET ||--o{ ACCESS_GRANT : gated_by
+  TENANT ||--o{ BACKUP_RUN : protects
+  TENANT ||--o{ DATA_EXPORT_REQUEST : exports

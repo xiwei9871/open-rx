@@ -1,0 +1,671 @@
+openapi: 3.1.0
+info:
+  title: EasyRS — Orthodontic Rx & Lab Production API
+  version: 0.1.0-draft
+  description: >-
+    Stage A draft contract for the open-source EasyRx alternative. Endpoints
+    marked "x-status: provisional" are modeled from public documentation and
+    MUST NOT be implemented as final behavior until V1.1 verification.
+    All routes are tenant-scoped implicitly via authentication.
+  license:
+    name: TBD — see ADR-0007 (license not yet selected)
+servers:
+  - url: https://api.example.invalid/v1
+    description: placeholder — deployments define their own base URL
+
+tags:
+  - {name: iam, description: "Organizations, locations, members, roster, connections"}
+  - {name: patients, description: "Patient registry and treatment cases"}
+  - {name: prescriptions, description: "Rx authoring, submission, status, catalog, templates"}
+  - {name: collaboration, description: "Comments, clinical notifications, approvals, tags, views"}
+  - {name: assets, description: "Immutable file assets, references, uploads, print queue"}
+  - {name: processing, description: "3D processing recipes, jobs, QC, command center"}
+  - {name: production, description: "Lab MES: orders, steps, shipments, service orders"}
+  - {name: finance, description: "Price lists, invoices, payments, reports (P2)"}
+  - {name: integrations, description: "Vendor connections, scan events, webhooks, desktop agent"}
+  - {name: platform, description: "Audit, data export, health"}
+
+paths:
+  /orgs:
+    get:
+      tags: [iam]
+      operationId: listOrgs
+      summary: "List orgs visible to caller"
+      responses: {"200": {description: "OrgPage"}}
+    post:
+      tags: [iam]
+      operationId: createOrg
+      summary: "Create organization"
+      responses: {"201": {description: "Org"}}
+  /orgs/{orgId}/locations:
+    get:
+      tags: [iam]
+      operationId: listLocations
+      summary: "List locations"
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses: {"200": {description: "Locations"}}
+    post:
+      tags: [iam]
+      operationId: createLocation
+      summary: "Add location"
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses: {"201": {description: "Location"}}
+  /orgs/{orgId}/members:
+    get:
+      tags: [iam]
+      operationId: listMembers
+      summary: "List memberships"
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses: {"200": {description: "Memberships"}}
+    post:
+      tags: [iam]
+      operationId: inviteMember
+      summary: "Invite member (role required)"
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses: {"201": {description: "Membership"}}
+  /orgs/{orgId}/roster:
+    get:
+      tags: [iam]
+      operationId: listRoster
+      summary: "Doctor and clinical staff roster"
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses: {"200": {description: "Roster"}}
+    post:
+      tags: [iam]
+      operationId: addRosterMember
+      summary: "Add roster member (may not be a login user)"
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses: {"201": {description: "RosterMember"}}
+  /org-connections:
+    get:
+      tags: [iam]
+      operationId: listOrgConnections
+      summary: "List practice↔lab connections"
+      responses: {"200": {description: "Connections"}}
+    post:
+      tags: [iam]
+      operationId: requestOrgConnection
+      summary: "Request connection"
+      responses: {"202": {description: "PendingConnection"}}
+  /org-connections/{connectionId}:
+    patch:
+      tags: [iam]
+      operationId: transitionOrgConnection
+      summary: "accept or revoke (status transitions only)"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/ConnectionId"]
+      responses: {"200": {description: "Connection"}}
+
+  /patients:
+    get:
+      tags: [patients]
+      operationId: searchPatients
+      summary: "Search by name fragment, dob, external_ref"
+      responses: {"200": {description: "PatientPage"}}
+    post:
+      tags: [patients]
+      operationId: createPatient
+      summary: "Create patient"
+      responses:
+        "201": {description: "Patient"}
+        "409": {description: "PossibleDuplicate"}
+  /patients/{patientId}:
+    get:
+      tags: [patients]
+      operationId: getPatient
+      summary: "Get patient"
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "200": {description: "Patient"}
+        "403": {description: "Forbidden"}
+        "404": {description: "NotFound"}
+    patch:
+      tags: [patients]
+      operationId: updatePatient
+      summary: "Update patient"
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses: {"200": {description: "Patient"}}
+    delete:
+      tags: [patients]
+      operationId: deletePatient
+      summary: "Soft-delete (retention policy)"
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses: {"204": {description: "Deleted"}}
+  /patients/{patientId}/cases:
+    get:
+      tags: [patients]
+      operationId: listCases
+      summary: "List treatment cases"
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses: {"200": {description: "Cases"}}
+    post:
+      tags: [patients]
+      operationId: createCase
+      summary: "Open treatment case"
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses: {"201": {description: "Case"}}
+  /patients/{patientId}/rx-history:
+    get:
+      tags: [patients]
+      operationId: patientRxHistory
+      summary: "Patient prescription history"
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses: {"200": {description: "RxPage"}}
+
+  /rx:
+    get:
+      tags: [prescriptions]
+      operationId: listRx
+      summary: "Dashboard list with status/date/office/doctor/lab/tag filters"
+      responses: {"200": {description: "RxPage"}}
+    post:
+      tags: [prescriptions]
+      operationId: createRx
+      summary: "Create draft Rx"
+      responses: {"201": {description: "Rx"}}
+  /rx/{rxId}:
+    get:
+      tags: [prescriptions]
+      operationId: getRx
+      summary: "Get Rx"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200": {description: "Rx"}
+        "403": {description: "CrossTenantDenied"}
+    patch:
+      tags: [prescriptions]
+      operationId: updateRx
+      summary: "Edit draft (If-Match version)"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200": {description: "Rx"}
+        "409": {description: "VersionConflict"}
+  /rx/{rxId}/items:
+    put:
+      tags: [prescriptions]
+      operationId: replaceRxItems
+      summary: "Replace parts, appliances, and tooth operations"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"200": {description: "RxItems"}}
+  /rx/{rxId}/submit:
+    post:
+      tags: [prescriptions]
+      operationId: submitRx
+      summary: "Submit Rx to connected lab (idempotent)"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": {description: "Submitted or first-result replay"}
+        "409": {description: "VersionConflict"}
+        "422": {description: "NoAcceptedConnection or ValidationFailed"}
+  /rx/{rxId}/unsubmit:
+    post:
+      tags: [prescriptions]
+      operationId: unsubmitRx
+      summary: "Pull back to draft (blocked once checked-in)"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200": {description: "BackToDraft"}
+        "409": {description: "AlreadyCheckedIn"}
+  /rx/{rxId}/check-in:
+    post:
+      tags: [prescriptions]
+      operationId: checkInRx
+      summary: "Lab check-in — explicit; file download alone does NOT check in"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"200": {description: "CheckedIn"}}
+  /rx/{rxId}/transition:
+    post:
+      tags: [prescriptions]
+      operationId: transitionRx
+      summary: "Guarded status transition (complete/ship/receive/deliver/cancel per state machine)"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200": {description: "Rx"}
+        "422": {description: "IllegalTransition"}
+  /rx/{rxId}/attachments:
+    post:
+      tags: [prescriptions]
+      operationId: attachToRx
+      summary: "Attach file reference (post-submit allowed)"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"201": {description: "FileRef"}}
+  /rx/{rxId}/pdf:
+    get:
+      tags: [prescriptions]
+      operationId: listRxPdfs
+      summary: "List PDF versions"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"200": {description: "PdfVersions"}}
+    post:
+      tags: [prescriptions]
+      operationId: renderRxPdf
+      summary: "Render Rx PDF (new version)"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"202": {description: "RenderJob"}}
+
+  /catalog/parts:
+    get:
+      tags: [prescriptions]
+      operationId: listParts
+      summary: "Search parts library"
+      responses: {"200": {description: "Parts"}}
+  /catalog/appliances:
+    get:
+      tags: [prescriptions]
+      operationId: listAppliances
+      summary: "Appliance library"
+      responses: {"200": {description: "Appliances"}}
+  /templates:
+    get:
+      tags: [prescriptions]
+      operationId: listTemplates
+      summary: "Templates visible to org (own + shared)"
+      responses: {"200": {description: "Templates"}}
+    post:
+      tags: [prescriptions]
+      operationId: createTemplate
+      summary: "Save template"
+      responses: {"201": {description: "Template"}}
+  /templates/{templateId}/shares:
+    post:
+      tags: [prescriptions]
+      operationId: shareTemplate
+      summary: "Share to practice org (view|copy|edit)"
+      parameters: [$ref: "#/components/parameters/TemplateId"]
+      responses: {"201": {description: "Share"}}
+
+  /rx/{rxId}/comments:
+    get:
+      tags: [collaboration]
+      operationId: listRxComments
+      summary: "List comments"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"200": {description: "Comments"}}
+    post:
+      tags: [collaboration]
+      operationId: createRxComment
+      summary: "Add comment"
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses: {"201": {description: "Comment"}}
+  /notifications:
+    get:
+      tags: [collaboration]
+      operationId: listNotifications
+      summary: "Inbox with kind/status filters"
+      responses: {"200": {description: "Notifications"}}
+    post:
+      tags: [collaboration]
+      operationId: createNotification
+      summary: "Create clinical notification (info|ack|approval|email_only)"
+      responses: {"201": {description: "Notification"}}
+  /notifications/{notificationId}/decision:
+    post:
+      tags: [collaboration]
+      operationId: decideNotification
+      summary: "Approve or reject with e-signature bound to rx version"
+      parameters: [$ref: "#/components/parameters/NotificationId"]
+      responses:
+        "200": {description: "Approval"}
+        "409": {description: "VersionDrift"}
+  /tags:
+    get:
+      tags: [collaboration]
+      operationId: listTags
+      summary: "List tags"
+      responses: {"200": {description: "Tags"}}
+    post:
+      tags: [collaboration]
+      operationId: createTag
+      summary: "Create tag"
+      responses: {"201": {description: "Tag"}}
+  /saved-views:
+    get:
+      tags: [collaboration]
+      operationId: listSavedViews
+      summary: "List saved dashboard views"
+      responses: {"200": {description: "Views"}}
+    post:
+      tags: [collaboration]
+      operationId: createSavedView
+      summary: "Save view (filters, default flag)"
+      responses: {"201": {description: "View"}}
+
+  /uploads:
+    post:
+      tags: [assets]
+      operationId: declareUpload
+      summary: "Declare upload (size, sha256, kind, jaw) -> session + URLs"
+      responses: {"201": {description: "UploadSession"}}
+  /uploads/{sessionId}/complete:
+    post:
+      tags: [assets]
+      operationId: completeUpload
+      summary: "Finalize upload -> quarantine scan"
+      parameters: [$ref: "#/components/parameters/SessionId"]
+      responses: {"202": {description: "Scanning"}}
+  /assets/{assetId}:
+    get:
+      tags: [assets]
+      operationId: getAsset
+      summary: "Get asset metadata"
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      responses:
+        "200": {description: "AssetMeta"}
+        "403": {description: "Forbidden"}
+  /assets/{assetId}/download:
+    post:
+      tags: [assets]
+      operationId: downloadAsset
+      summary: "Mint access_grant + presigned URL (audited)"
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      responses: {"200": {description: "SignedUrl"}}
+  /assets/{assetId}/references:
+    post:
+      tags: [assets]
+      operationId: grantAssetReference
+      summary: "Grant reference to patient/rx/notification/order"
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      responses: {"201": {description: "FileRef"}}
+    delete:
+      tags: [assets]
+      operationId: revokeAssetReference
+      summary: "Revoke reference"
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      responses: {"204": {description: "Revoked"}}
+  /print-queue:
+    get:
+      tags: [assets]
+      operationId: printQueue
+      summary: "STL print list"
+      x-status: provisional
+      responses: {"200": {description: "PrintList"}}
+
+  /processing-recipes:
+    get:
+      tags: [processing]
+      operationId: listRecipes
+      summary: "List recipes"
+      responses: {"200": {description: "Recipes"}}
+    post:
+      tags: [processing]
+      operationId: createRecipe
+      summary: "Create recipe (new immutable version)"
+      responses: {"201": {description: "Recipe"}}
+  /processing-jobs:
+    get:
+      tags: [processing]
+      operationId: listProcessingJobs
+      summary: "Job list (status filter)"
+      responses: {"200": {description: "JobPage"}}
+    post:
+      tags: [processing]
+      operationId: requestProcessingJob
+      summary: "Request processing (idempotent)"
+      parameters: [$ref: "#/components/parameters/IdempotencyKey"]
+      responses: {"202": {description: "Job"}}
+  /processing-jobs/{jobId}:
+    get:
+      tags: [processing]
+      operationId: getProcessingJob
+      summary: "Get job"
+      parameters: [$ref: "#/components/parameters/JobId"]
+      responses: {"200": {description: "Job"}}
+  /processing-jobs/{jobId}/cancel:
+    post:
+      tags: [processing]
+      operationId: cancelProcessingJob
+      summary: "Cancel job (graceful)"
+      parameters: [$ref: "#/components/parameters/JobId"]
+      responses: {"200": {description: "Job"}}
+  /processing-jobs/{jobId}/decision:
+    post:
+      tags: [processing]
+      operationId: decideProcessingJob
+      summary: "QC approve/reject"
+      parameters: [$ref: "#/components/parameters/JobId"]
+      responses: {"200": {description: "Job"}}
+  /command-center/scans:
+    get:
+      tags: [processing]
+      operationId: commandCenterScans
+      summary: "Inbound scan queue + processing status"
+      x-status: provisional
+      responses: {"200": {description: "ScanQueue"}}
+
+  /production-orders:
+    get:
+      tags: [production]
+      operationId: listProductionOrders
+      summary: "List production orders"
+      responses: {"200": {description: "OrderPage"}}
+    post:
+      tags: [production]
+      operationId: createProductionOrder
+      summary: "Create order (from Rx or manual entry)"
+      responses: {"201": {description: "Order"}}
+  /production-orders/{orderId}:
+    get:
+      tags: [production]
+      operationId: getProductionOrder
+      summary: "Get order"
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses: {"200": {description: "Order"}}
+  /production-orders/{orderId}/steps:
+    get:
+      tags: [production]
+      operationId: listProductionSteps
+      summary: "List steps"
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses: {"200": {description: "Steps"}}
+    post:
+      tags: [production]
+      operationId: planProductionStep
+      summary: "Plan step (activity + option)"
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses: {"201": {description: "Step"}}
+  /production-orders/{orderId}/transition:
+    post:
+      tags: [production]
+      operationId: transitionProductionOrder
+      summary: "hold|resume|qc|ready_to_ship|ship"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses:
+        "200": {description: "Order"}
+        "422": {description: "IllegalTransition"}
+  /service-orders:
+    post:
+      tags: [production]
+      operationId: createServiceOrder
+      summary: "Remake|repair|refinement child order"
+      responses: {"201": {description: "ServiceOrder"}}
+  /shipments/{shipmentId}/events:
+    post:
+      tags: [production]
+      operationId: appendShipmentEvent
+      summary: "Append tracking event"
+      parameters: [$ref: "#/components/parameters/ShipmentId"]
+      responses: {"201": {description: "ShipmentEvent"}}
+
+  /price-lists:
+    get:
+      tags: [finance]
+      operationId: listPriceLists
+      summary: "Lab price lists with customer tiers"
+      x-status: provisional
+      responses: {"200": {description: "PriceLists"}}
+    post:
+      tags: [finance]
+      operationId: createPriceList
+      summary: "Create price list"
+      x-status: provisional
+      responses: {"201": {description: "PriceList"}}
+  /invoices:
+    get:
+      tags: [finance]
+      operationId: listInvoices
+      summary: "List invoices"
+      x-status: provisional
+      responses: {"200": {description: "Invoices"}}
+    post:
+      tags: [finance]
+      operationId: createInvoice
+      summary: "Invoice from order (price snapshot)"
+      x-status: provisional
+      responses: {"201": {description: "Invoice"}}
+  /invoices/{invoiceId}/payments:
+    post:
+      tags: [finance]
+      operationId: recordPayment
+      summary: "Record + allocate payment"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/InvoiceId"]
+      responses: {"201": {description: "Allocation"}}
+  /reports/{kind}:
+    post:
+      tags: [finance]
+      operationId: runReport
+      summary: "Run report export job"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/ReportKind"]
+      responses: {"202": {description: "ReportJob"}}
+
+  /integrations/connections:
+    get:
+      tags: [integrations]
+      operationId: listIntegrationConnections
+      summary: "List vendor connections"
+      responses: {"200": {description: "Connections"}}
+    post:
+      tags: [integrations]
+      operationId: createIntegrationConnection
+      summary: "Register vendor connection (auth via secret ref)"
+      responses: {"201": {description: "Connection"}}
+  /integrations/scan-events:
+    get:
+      tags: [integrations]
+      operationId: listScanEvents
+      summary: "Inbound scans pending match"
+      responses: {"200": {description: "ScanEvents"}}
+    post:
+      tags: [integrations]
+      operationId: ingestScanEvent
+      summary: "Adapter ingest (webhook or poller)"
+      responses: {"202": {description: "Accepted"}}
+  /webhooks:
+    get:
+      tags: [integrations]
+      operationId: listWebhooks
+      summary: "List webhook subscriptions"
+      responses: {"200": {description: "Webhooks"}}
+    post:
+      tags: [integrations]
+      operationId: createWebhook
+      summary: "Subscribe (HMAC secret issued)"
+      responses: {"201": {description: "Webhook"}}
+  /agent/sessions:
+    post:
+      tags: [integrations]
+      operationId: agentSession
+      summary: "Desktop agent check-in + sync manifest"
+      x-status: provisional
+      responses: {"201": {description: "AgentSession"}}
+
+  /audit-events:
+    get:
+      tags: [platform]
+      operationId: listAuditEvents
+      summary: "Audit query (admin, org-scoped)"
+      responses: {"200": {description: "AuditPage"}}
+  /data-export-requests:
+    post:
+      tags: [platform]
+      operationId: requestDataExport
+      summary: "Request org data export (audited, approved)"
+      responses: {"202": {description: "ExportRequest"}}
+  /healthz:
+    get:
+      tags: [platform]
+      operationId: healthz
+      summary: "Liveness"
+      security: []
+      responses: {"200": {description: "OK"}}
+
+components:
+  parameters:
+    OrgId: {name: orgId, in: path, required: true, schema: {type: string, format: uuid}}
+    ConnectionId: {name: connectionId, in: path, required: true, schema: {type: string, format: uuid}}
+    PatientId: {name: patientId, in: path, required: true, schema: {type: string, format: uuid}}
+    RxId: {name: rxId, in: path, required: true, schema: {type: string, format: uuid}}
+    NotificationId: {name: notificationId, in: path, required: true, schema: {type: string, format: uuid}}
+    TemplateId: {name: templateId, in: path, required: true, schema: {type: string, format: uuid}}
+    SessionId: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
+    AssetId: {name: assetId, in: path, required: true, schema: {type: string, format: uuid}}
+    JobId: {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+    OrderId: {name: orderId, in: path, required: true, schema: {type: string, format: uuid}}
+    ShipmentId: {name: shipmentId, in: path, required: true, schema: {type: string, format: uuid}}
+    InvoiceId: {name: invoiceId, in: path, required: true, schema: {type: string, format: uuid}}
+    ReportKind:
+      name: kind
+      in: path
+      required: true
+      schema: {type: string, enum: [sales, aging, orders, kpi]}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string}
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes:
+            rx:read: "read prescriptions"
+            rx:write: "create or update prescriptions"
+            assets:write: "upload files"
+            webhook:manage: "manage webhook endpoints"
+  schemas:
+    Rx:
+      type: object
+      required: [id, rx_number, status, version]
+      properties:
+        id: {type: string, format: uuid}
+        rx_number: {type: string}
+        status:
+          type: string
+          enum: [draft, submitted, checked_in, in_production, on_hold, completed, shipped, received, delivered, cancelled]
+        version: {type: integer}
+        form_type: {type: string, enum: [standard, aligner, idb]}
+        due_date: {type: string, format: date}
+        practice_org_id: {type: string, format: uuid}
+        lab_org_id: {type: string, format: uuid}
+    ProcessingJob:
+      type: object
+      required: [id, status, recipe_id, recipe_version]
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [pending, processing, qc_pending, approved, rejected, failed, cancelled, ready_to_print, downloaded, printed]
+        recipe_id: {type: string, format: uuid}
+        recipe_version: {type: integer}
+        engine: {type: string}
+        engine_version: {type: string}
+        input_sha256: {type: string}
+        params_snapshot: {type: object}
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        trace_id: {type: string}
+security:
+  - bearerAuth: []
+  - oauth2: []
