@@ -20,7 +20,7 @@
 | 11 | 文档链接、JSON、CSV、Mermaid、OpenAPI 自动验证 | **PASS** | 31/31 checks；redocly lint **0 error**（78 warning 均为风格建议）；docs/README 全部链接解析成功 |
 | 12 | 无 PHI/密钥/专有素材泄露 | **PASS** | secret 扫描过；无 .stl 入仓；SCR 截图仅引用 ID；research 哈希钉死防漂移 |
 | 13 | 无虚构完成记录 | **PASS** | 全部内容标注"拟议/PROVISIONAL/UNKNOWN"；README 明示无可运行代码 |
-| 14 | GitHub 提交与推送 | **BLOCKED** | 工作区原无 git 仓库与 remote；已建本地分支 `devin/easyrx-stage-a-baseline-v1` 并提交，无远端可推送（见 §交付说明） |
+| 14 | GitHub 提交与推送 | **PARTIAL** | 已推送 `main` + `devin/easyrx-stage-a-baseline-v1` 至 github.com/xiwei9871/open-rx（SSH）；PR 未建——`gh` 无 API 凭据，给出 compare 链接人工创建（见 §交付说明） |
 
 ## 诚实声明
 
@@ -30,7 +30,9 @@
 
 ## 交付说明（§11）
 
-- 仓库：`/Users/xiwei/easyrs`（本地 git，branch `devin/easyrx-stage-a-baseline-v1`）
+- 仓库：https://github.com/xiwei9871/open-rx
+- 分支：`devin/easyrx-stage-a-baseline-v1`（`main` 为空初始提交，作为 PR 基线）
+- Commit：`cd8ccef`（验收报告更新见后续 commit）
+- PR：**未创建——`gh` 未认证**。创建链接：https://github.com/xiwei9871/open-rx/compare/main...devin/easyrx-stage-a-baseline-v1?expand=1
 - 主要产物：`docs/`（audit/architecture/api/backlog/planning/poc）、`tools/`、`README.md`、`AGENTS.md`、`CONTRIBUTING.md`、`.github/workflows/validate.yml`
-- GitHub 推送：**BLOCKED — 无已配置 remote**。解除方式：提供目标 GitHub 仓库地址后 `git remote add origin <url> && git push -u origin devin/easyrx-stage-a-baseline-v1`，随后可建 PR。
 - 验证命令：`python3 tools/validate_baseline.py`（31/31）、`python3 tools/gen_backlog.py --check`（17 files in sync）、`npx @redocly/cli lint docs/api/openapi.yaml`（valid）
