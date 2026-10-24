@@ -43,8 +43,10 @@ Sources read in full: SRC04, SRC05, SRC06, SRC07, SRC08, SRC31. Supporting: SRC3
 - AI Blockout: intensity levels for interproximal + gingival blockout + undercut retention
   distance; add-on for 3D+ plans (SRC07).
 - EBR (manual bracket removal) exists as an add-on (SRC35 index).
-- 2025: auto-processing can be restricted to mapped Templates/**AI Profiles** — confirms named
-  processing profiles exist (SRC34, PARTIAL).
+- 2025: **AI Profiles can be saved from the Request AI Service page** (March 2025) and assigned
+  per-appliance (Feb 2025: "Appliance A → Profile A"); auto-processing can be restricted to
+  mapped Templates/AI Profiles (May 2025) — profile persistence CONFIRMED (SRC34).
+- Processed-file naming: raw → `3D-O` output → `3D-E` edited output (SRC-D8 Dec-2023 bugfix).
 - Ready-to-Print / Downloaded / Printed print-status flags: NOT verified in any read source —
   UNKNOWN (was inventoried as D1 from secondary notes).
 

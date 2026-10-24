@@ -16,11 +16,15 @@ Durability (SRC-D4): once approved, the practice can submit "permanently … unl
 your lab from their Connected Labs list." → **practice-side disconnect exists** (removing the lab
 from the practice's own Connected Labs list).
 
+**Update (post-review, SRC-D9 Jan-2024 release notes)**: "For Lab users, the option to disconnect
+from an EasyRx Practice account is now found here" → **lab-side disconnect exists since Jan 2024**.
+Direction confirmed both ways; what happens to in-flight Rxs remains undocumented.
+
 ## V-14 — what is NOT documented
 
 | Question | Finding |
 |---|---|
-| Can the LAB revoke a connection? | UNKNOWN — no source describes lab-side disconnect; the documented removal direction is practice→lab only |
+| Can the LAB revoke a connection? | CONFIRMED that a lab-side disconnect control exists (SRC-D9, Jan 2024); its effects are not described |
 | Are new orders blocked after disconnect? | Not documented. Reasonable inference only — EasyRS policy applies (below) |
 | Do already-submitted Rxs stay visible to the lab? | UNKNOWN |
 | Do checked-in Rxs continue fulfillment? | UNKNOWN |
@@ -46,8 +50,9 @@ loss; every point above is marked PROVISIONAL in the permission matrix.
 ## Share with Colleague (CONFIRMED SRC-D3)
 
 - From edit/view Rx → email anyone (EasyRx account or not) a view link to that Rx.
-- **Link limits: 24 hours AND max 5 opens — whichever hits first**; sender shown as
-  Support@EasyRxOrtho.com.
+- **Link limits: 72 hours (extended from 24h, SRC-D8 Sept-2023) AND max 5 opens — whichever hits
+  first**; sender shown as Support@EasyRxOrtho.com; **multiple recipients allowed via
+  comma-separated emails** (SRC-D8).
 - Recipient sees the Rx + can download attached files; STL viewing requires own viewer/account.
 - Permanent alternative: Download to PDF.
 - 2016+: all connected labs can use it (outsourcing STL sharing).

@@ -32,6 +32,12 @@ Entry points: Dashboard `[Create Rx]` button, or `[Create Rx]` inside a patient 
 - Red "gear wheel" on a placed item = Part Options (e.g. Labial Bow: bow type + wire size .028/.032;
   RPE: screw type; recurve spring: flip). Menu icons turn red/animate when options need attention.
 - Part Options may be left unset — guidance is to add a comment; lab expected to ask if unclear.
+- **Update (SRC-D8): part options CAN be made required** — "Band options can now be required"
+  ("Prompt for Bands" forces band details before submit). Treat `required` as a per-part-option
+  flag that blocks submission when unset.
+- **Update (SRC-D8): Ship To Patient** selection exists at create; org defaults for Doctor /
+  Office / Ship To can autofill new Rxs (Sept-2023); Saved Rxs bulk-deletable; switching labs
+  re-resolves that lab's field settings (bugfix evidence).
 - Toolbar actions (SRC02 Part 2 index): save rx, save as template, add comment, set acrylic color,
   **change date needed**, **change lab**, text annotation, freehand sketch, polyline sketch.
 - Comments (chat icon) = messages to the lab, visible below the drawing; lab can comment back;
@@ -69,6 +75,10 @@ Entry points: Dashboard `[Create Rx]` button, or `[Create Rx]` inside a patient 
 - Deleted Rx: restorable via EasyRx support within **60 days**; attached files are removed from
   the restored Rx but remain on the patient record (CONFIRMED SRC-D6). Separately, deleting a
   checked-out prescription is permanent (index-level, SRC-D6 related article — PARTIAL).
+- **Update (SRC34 Jan-2025): a self-serve "Rx recovery tool" now exists** that "should fully
+  retrieve the files", and user accounts can be granted/restricted a **delete-Rx permission**
+  (Account Settings > User Accounts). Bulk-delete of multiple Saved Rxs also exists
+  (SRC-D8 Sept-2023).
 - Per-Script billing counts a unique Prescription ID once — unsubmit + resubmit does not bill twice
   (CONFIRMED SRC24).
 
