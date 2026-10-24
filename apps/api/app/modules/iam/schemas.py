@@ -98,13 +98,20 @@ class OrgConnectionOut(BaseModel):
     practice_org_id: UUID
     lab_org_id: UUID
     status: str
+    initiated_by_org_id: UUID
+    decided_by_user_id: UUID | None
+    decided_at: datetime | None
     granted_scopes: list
     version: int
 
 
 class ConnectionTransition(BaseModel):
-    action: Literal["accept", "revoke"]
+    # accept/reject: counterparty only. withdraw: initiator only.
+    # revoke: either side, accepted rows only (ADR-0006 "no new access").
+    action: Literal["accept", "reject", "withdraw", "revoke"]
     expected_version: int = Field(ge=0)
+    # accept may NARROW scopes; expansion beyond requested is rejected.
+    granted_scopes: list[str] | None = None
 
 
 class AuditEventOut(BaseModel):

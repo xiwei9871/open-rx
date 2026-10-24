@@ -7,7 +7,7 @@ access is denied at the RLS layer first, app layer second.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, LargeBinary, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,7 +60,8 @@ class UserAccount(Base, IdMixin, CreatedAtMixin):
     status: Mapped[str] = mapped_column(
         Enum("active", "disabled", name="user_status"), default="active"
     )
-    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Fernet-encrypted TOTP seed (app/security.py). Never stored in clear.
+    totp_secret_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(default=False)
 
 
@@ -113,9 +114,16 @@ class OrgConnection(Base, IdMixin, CreatedAtMixin):
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     practice_org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     lab_org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
-    status: Mapped[str] = mapped_column(
-        Enum("pending", "accepted", "revoked", name="connection_status"),
-        default="pending",
+    # String + CHECK (migration 0002): pending/accepted/rejected/withdrawn/revoked
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    # Which side opened the request — the counterparty must decide. (Our own
+    # security design decision, NOT an EasyRx-derived rule — V-14 pending.)
+    initiated_by_org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    decided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     granted_scopes: Mapped[list] = mapped_column(JSONB, default=list)
     version: Mapped[int] = mapped_column(default=0)

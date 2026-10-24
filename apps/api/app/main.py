@@ -53,6 +53,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+_SAFE = {"GET", "HEAD", "OPTIONS"}
+
+
+@app.middleware("http")
+async def csrf_origin_guard(request, call_next):
+    """CSRF defense for cookie-authenticated unsafe methods.
+
+    Browsers cannot attach a custom header cross-origin without a CORS
+    preflight, so requiring X-Requested-With makes cross-site form/fetch
+    forgery impossible. Origin (when sent) must additionally be allowlisted.
+    Non-browser clients (curl/tests) may omit Origin but must send the header.
+    """
+    if request.method not in _SAFE and request.url.path.startswith("/v1/"):
+        from fastapi.responses import JSONResponse
+        if request.headers.get("x-requested-with") != "XMLHttpRequest":
+            return JSONResponse(status_code=403, content={
+                "detail": {"code": "forbidden", "message": "CSRF header missing"}})
+        origin = request.headers.get("origin")
+        if origin and origin not in _s.cors_origin_list:
+            return JSONResponse(status_code=403, content={
+                "detail": {"code": "forbidden", "message": "Origin not allowed"}})
+    return await call_next(request)
+
+
 app.include_router(auth_router, prefix="/v1")
 app.include_router(iam_router, prefix="/v1")
 

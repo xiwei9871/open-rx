@@ -11,9 +11,14 @@ ALL_TABLES = RLS_TABLES | {"tenant", "user_account", "auth_session",
 
 
 async def test_alembic_at_head(admindb):
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from tests.conftest import API_DIR
+    head = ScriptDirectory.from_config(
+        Config(str(API_DIR / "alembic.ini"))).get_current_head()
     rev = (await admindb.execute(
         text("SELECT version_num FROM alembic_version"))).scalar_one()
-    assert rev == "0001"
+    assert rev == head
 
 
 async def test_tables_exist(admindb):

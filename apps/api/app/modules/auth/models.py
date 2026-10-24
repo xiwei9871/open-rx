@@ -42,6 +42,7 @@ class AuthChallenge(Base, IdMixin, CreatedAtMixin):
     )
     purpose: Mapped[str] = mapped_column(Enum("totp_login", name="challenge_purpose"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(default=0)
     consumed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

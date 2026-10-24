@@ -9,7 +9,7 @@ import asyncio
 
 from sqlalchemy import select
 
-from app.db import AdminSessionLocal
+from app.db import admin_session
 from app.modules.iam.models import (
     Membership, OrgConnection, Organization, RosterMember, Tenant, UserAccount,
 )
@@ -26,7 +26,10 @@ USERS = [
 
 
 async def seed() -> None:
-    async with AdminSessionLocal() as db:
+    from app.config import get_settings
+    if get_settings().env not in ("dev", "test"):
+        raise SystemExit("refusing to seed synthetic data outside dev/test")
+    async with admin_session() as db:
         tenant = (await db.execute(select(Tenant))).scalars().first()
         if not tenant:
             tenant = Tenant(name="Dev Tenant (synthetic)")
@@ -69,6 +72,7 @@ async def seed() -> None:
             db.add(OrgConnection(tenant_id=tenant.id,
                                  practice_org_id=orgs["PA"].id,
                                  lab_org_id=orgs["LA"].id,
+                                 initiated_by_org_id=orgs["PA"].id,
                                  status="accepted"))
 
         if not (await db.execute(select(RosterMember).where(

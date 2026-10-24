@@ -83,8 +83,9 @@ async def test_totp_2fa_full_flow(client, admindb):
     assert ok.status_code == 200
     assert (await client.get("/v1/auth/me")).status_code == 200
 
-    # cleanup: disable 2fa for determinism
+    # cleanup: disable 2fa for determinism (seed is NOT encrypted-at-rest;
+    # the column is bytea now — a NULL reset is sufficient)
     await admindb.execute(text(
-        "UPDATE user_account SET totp_enabled=false, totp_secret=NULL "
+        "UPDATE user_account SET totp_enabled=false, totp_secret_enc=NULL "
         "WHERE email='tech@la.dev'"))
     await admindb.commit()

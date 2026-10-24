@@ -6,13 +6,14 @@ existence cannot be probed (authz-test-matrix AZ-30..36).
 """
 import secrets
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import payload_hash, record
-from app.deps import Db, Me, Principal, require_perm, tenant_commit
+from app.deps import Db, Me, Principal, require_perm, tenant_commit, _deny
 from app.modules.audit.models import AuditEvent
 from app.modules.iam.models import (
     Location, Membership, OrgConnection, Organization, RosterMember, UserAccount,
@@ -206,9 +207,27 @@ async def request_connection(body: OrgConnectionRequest, request: Request,
             OrgConnection.practice_org_id == body.practice_org_id,
             OrgConnection.lab_org_id == body.lab_org_id)
     )).scalar_one_or_none()
-    if existing:  # natural-key idempotency
+    if existing:
+        if existing.status in ("pending", "accepted"):  # natural-key idempotency
+            return existing
+        # revoked/rejected/withdrawn -> re-request restarts as pending, with
+        # the (possibly other side) caller stamped as the new initiator.
+        before = payload_hash({"status": existing.status, "version": existing.version})
+        existing.status = "pending"
+        existing.initiated_by_org_id = p.org.id
+        existing.decided_by_user_id = None
+        existing.decided_at = None
+        existing.granted_scopes = body.granted_scopes
+        existing.version += 1
+        record(db, action="connection.re_requested", object_type="org_connection",
+               object_id=existing.id, tenant_id=p.tenant_id, org_id=p.org.id,
+               actor_user_id=p.user.id, request=request,
+               before={"status": before},
+               after=body.model_dump(mode="json"))
+        await tenant_commit(db, p)
         return existing
-    c = OrgConnection(tenant_id=p.tenant_id, **body.model_dump())
+    c = OrgConnection(tenant_id=p.tenant_id, initiated_by_org_id=p.org.id,
+                      **body.model_dump())
     db.add(c)
     await db.flush()
     record(db, action="connection.requested", object_type="org_connection",
@@ -229,23 +248,42 @@ async def transition_connection(connection_id: uuid.UUID,
     c = await db.get(OrgConnection, connection_id)
     if not c or c.tenant_id != p.tenant_id \
             or p.org.id not in (c.practice_org_id, c.lab_org_id):
-        raise HTTPException(status_code=403, detail={
-            "code": "forbidden", "message": "Access denied"})
+        await _deny(db, request, p, "connection_not_party")
     if body.expected_version != c.version:
         raise HTTPException(status_code=409, detail={
             "code": "version_conflict", "message": "Connection changed; reload"})
-    before = payload_hash({"status": c.status, "version": c.version})
+
+    # Direction rule (EasyRS security decision, V-14 pending): the side that
+    # did NOT initiate decides accept/reject; the initiator may only withdraw;
+    # revoke is bilateral on an accepted connection. Actor is always stamped.
+    is_initiator = p.org.id == c.initiated_by_org_id
+    if body.action in ("accept", "reject") and is_initiator:
+        await _deny(db, request, p, "initiator_cannot_decide")
+    if body.action == "withdraw" and not is_initiator:
+        await _deny(db, request, p, "counterparty_cannot_withdraw")
     legal = {("pending", "accept"): "accepted",
-             ("pending", "revoke"): "revoked",
+             ("pending", "reject"): "rejected",
+             ("pending", "withdraw"): "withdrawn",
              ("accepted", "revoke"): "revoked"}
     target = legal.get((c.status, body.action))
     if not target:
         raise HTTPException(status_code=422, detail={
             "code": "illegal_transition",
             "message": f"{body.action} not allowed from {c.status}"})
+    if body.action == "accept" and body.granted_scopes is not None \
+            and not set(body.granted_scopes) <= set(c.granted_scopes):
+        raise HTTPException(status_code=422, detail={
+            "code": "scope_expansion",
+            "message": "accept may only narrow the requested scopes"})
+    before = payload_hash({"status": c.status, "version": c.version})
     c.status = target
     c.version += 1
-    record(db, action=f"connection.{body.action}ed", object_type="org_connection",
+    if body.action in ("accept", "reject"):
+        c.decided_by_user_id = p.user.id
+        c.decided_at = datetime.now(UTC)
+    if body.action == "accept" and body.granted_scopes is not None:
+        c.granted_scopes = body.granted_scopes
+    record(db, action=f"connection.{target}", object_type="org_connection",
            object_id=c.id, tenant_id=p.tenant_id, org_id=p.org.id,
            actor_user_id=p.user.id, request=request,
            before={"status": before}, after={"status": c.status})

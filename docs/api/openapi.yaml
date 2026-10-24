@@ -179,9 +179,9 @@ paths:
     patch:
       tags: [iam]
       operationId: transitionOrgConnection
-      summary: "accept or revoke (status transitions only)"
+      summary: "decide or mutate a connection (direction-aware)"
       x-status: provisional
-      x-scope: "org_admin of either side (accept: receiving side; revoke: either)"
+      x-scope: "org_admin; accept/reject: counterparty only; withdraw: initiator only; revoke: either side on accepted (EasyRS decision, V-14 pending)"
       parameters: [$ref: "#/components/parameters/ConnectionId"]
       requestBody:
         required: true
@@ -191,8 +191,12 @@ paths:
               type: object
               required: [action, expected_version]
               properties:
-                action: {type: string, enum: [accept, revoke]}
+                action: {type: string, enum: [accept, reject, withdraw, revoke]}
                 expected_version: {type: integer, minimum: 0}
+                granted_scopes:
+                  type: [array, "null"]
+                  items: {type: string}
+                  description: "accept only; may narrow but never expand the requested scopes"
       responses:
         "200":
           description: "Updated connection"
@@ -1268,12 +1272,15 @@ components:
         linked_user_id: {type: [string, "null"], format: uuid}
     OrgConnection:
       type: object
-      required: [id, practice_org_id, lab_org_id, status, version]
+      required: [id, practice_org_id, lab_org_id, status, initiated_by_org_id, version]
       properties:
         id: {type: string, format: uuid}
         practice_org_id: {type: string, format: uuid}
         lab_org_id: {type: string, format: uuid}
-        status: {type: string, enum: [pending, accepted, revoked]}
+        status: {type: string, enum: [pending, accepted, rejected, withdrawn, revoked]}
+        initiated_by_org_id: {type: string, format: uuid, readOnly: true}
+        decided_by_user_id: {type: [string, "null"], format: uuid, readOnly: true}
+        decided_at: {type: [string, "null"], format: date-time, readOnly: true}
         granted_scopes: {type: array, items: {type: string}}
         version: {type: integer, readOnly: true}
     OrgConnectionRequest:
