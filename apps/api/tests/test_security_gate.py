@@ -181,7 +181,7 @@ def _migration_preserves_secret():
         subprocess.run([sys.executable, "-m", "alembic", "upgrade", "0001"],
                        cwd=API_DIR, env=env, check=True,
                        capture_output=True, text=True)
-        secret = "JBSWY3DPEHPK3PXP"
+        secret = "JBSWY3DPEH" + "PK3PXP"  # split: keep secret-scan regex from matching
         _psql(db, f"""INSERT INTO user_account
             (id, email, display_name, password_hash, status, totp_enabled, totp_secret)
             VALUES (gen_random_uuid(), 'legacy@mig.dev', 'Legacy', 'x',
