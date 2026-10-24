@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     rl_login_ip_window: int = 300
     rl_password_limit: int = 5
     rl_password_window: int = 900
+    rl_totp_ip_limit: int = 20
+    rl_totp_ip_window: int = 300
+    rl_write_limit: int = 60
+    rl_write_window: int = 300
 
     @model_validator(mode="after")
     def _prod_guards(self) -> "Settings":

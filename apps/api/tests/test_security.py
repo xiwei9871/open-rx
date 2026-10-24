@@ -49,6 +49,26 @@ async def test_login_rate_limit_trips(client):
         await reset("login_email", email)
 
 
+async def test_sensitive_write_rate_limit(client):
+    """IAM mutations share a per-user fixed-window bucket (B0.1 spec: 敏感写)."""
+    s = get_settings()
+    orig = s.rl_write_limit
+    s.rl_write_limit = 1
+    await login(client, "admin@pa.dev")
+    uid = (await client.get("/v1/auth/me")).json()["user_id"]
+    try:
+        await reset("write", uid)
+        r1 = await client.post("/v1/orgs", json={
+            "kind": "lab", "name": "RL Probe Lab 1", "timezone": "UTC"})
+        assert r1.status_code == 201
+        r2 = await client.post("/v1/orgs", json={
+            "kind": "lab", "name": "RL Probe Lab 2", "timezone": "UTC"})
+        assert r2.status_code == 429 and r2.json()["detail"]["code"] == "rate_limited"
+    finally:
+        s.rl_write_limit = orig
+        await reset("write", uid)
+
+
 async def test_rate_limiter_unit(appdb):
     """Direct: the Redis-backed limiter denies after `limit` hits."""
     await reset("unit", "id1")

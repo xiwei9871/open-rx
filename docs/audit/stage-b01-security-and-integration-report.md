@@ -53,7 +53,7 @@
 ### C. 认证安全
 
 - **CSRF/Origin 中间件**：`/v1/*` 非安全方法必须带 `X-Requested-With: XMLHttpRequest`（跨站伪造无法携带自定义头），且 Origin 若存在必须在白名单。实测：无头 403 `CSRF header missing`，`Origin: evil.example` 403 `Origin not allowed`。
-- **限流**（Redis 固定窗口，prod 故障时 fail-closed）：login 按 email 8/300s + IP 40/300s；password 5/900s。超限 → 429 `rate_limited` + `login_rate_limited` 审计。
+- **限流**（Redis 固定窗口，prod 故障时 fail-closed）：login 按 email 8/300s + IP 40/300s；2FA verify 按 IP 20/300s；password 5/900s；IAM 敏感写（orgs/locations/members/roster/connection 请求与裁决）按用户 60/300s。超限 → 429 `rate_limited` + `login_rate_limited` 审计；`test_sensitive_write_rate_limit` 实测第二笔写被拒。
 - **2FA**：`auth_challenge.attempts` 上限 5，用尽即 consumed；过期/已消费/重放全 401。
 - **改密即吊销其它会话**（`UPDATE auth_session SET revoked_at`，保留当前会话）。
 - **TOTP 加密存储**：`totp_secret_enc` BYTEA，Fernet 加密；密钥源 `TOTP_ENCRYPTION_KEY`（prod 必填）否则 HKDF(session_secret)。测试断言库内 bytes 不含明文种子且可回环解密。
@@ -79,19 +79,21 @@
 | job | 内容 |
 |---|---|
 | `validate` | 既有基线/契约/秘钥扫描（保留） |
-| `api-tests` | pg+redis services → **45 项 pytest**（25 原 + 20 新） |
+| `api-tests` | pg+redis services → **46 项 pytest**（25 原 + 21 新） |
 | `s3-compat` | pinned rustfs service → 5 项 S3 接口实测（restart 项仅本地） |
 | `e2e` | `docker compose up -d --build` 全栈 → Playwright chromium 2 项，报告 artifact 上传 |
 | `web-build` | tsc + vite build |
 
 junit 输出解析并在 job log 打印实际 `tests/failures/skipped` 计数（不写"全绿"）。原有 25 项测试全部保留且通过。
 
+远端实测：run [40093135296](https://github.com/xiwei9871/open-rx/actions/runs/40093135296)（commit `0cfb24f`）五 job 全 success — `validate` / `api-tests` / `s3-compat` / `e2e` / `web-build`。前一轮 run 4009263* 曾暴露两处 CI 独有缺陷并已修复：postgres init 容器内未收到 `POSTGRES_APP_PASSWORD`（CI 覆盖值与 init 口令分裂）与测试字符串字面量命中秘钥扫描正则。
+
 ## 5. 测试数量变化
 
-- 后端 pytest：**25 → 45**（+7 连接方向与安全、+10 CSRF/限流/会话/2FA/RLS 函数、+3 配置隔离）
+- 后端 pytest：**25 → 46**（+7 连接方向与安全、+11 CSRF/限流/会话/2FA/RLS 函数、+3 配置隔离）
 - S3 兼容套件：**+6**（5 CI 常驻 + 1 本地 restart）
 - 浏览器 E2E：**+2**（新增）
-- 总计：**25 → 53**
+- 总计：**25 → 54**（本地 `46 passed, 6 skipped` + `5 passed, 1 skipped` + restart `1 passed` + e2e `2 passed`）
 
 ## 6. 仍保留的非阻断风险
 

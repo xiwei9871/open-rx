@@ -120,6 +120,10 @@ async def login(body: LoginRequest, request: Request, response: Response, db: Db
 @router.post("/auth/2fa/verify", response_model=LoginResult, operation_id="verifyTwoFA")
 async def verify_2fa(body: TwoFAVerifyRequest, request: Request,
                      response: Response, db: Db):
+    ip = request.client.host if request.client else "unknown"
+    if not await allow("totp_ip", ip,
+                       _s.rl_totp_ip_limit, _s.rl_totp_ip_window):
+        raise _limited()
     ch = await db.get(AuthChallenge, body.challenge_id)
     now = datetime.now(UTC)
     if not ch or ch.consumed_at or ch.expires_at <= now \

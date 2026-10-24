@@ -26,6 +26,8 @@ os.environ["DATABASE_ADMIN_URL"] = (
 # rate-limit test uses a unique bucket identity instead.
 os.environ.setdefault("RL_LOGIN_EMAIL_LIMIT", "1000")
 os.environ.setdefault("RL_LOGIN_IP_LIMIT", "10000")
+os.environ.setdefault("RL_TOTP_IP_LIMIT", "10000")
+os.environ.setdefault("RL_WRITE_LIMIT", "10000")
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
