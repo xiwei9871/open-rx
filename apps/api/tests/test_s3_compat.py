@@ -83,7 +83,7 @@ async def test_presigned_upload_and_download(s3):
 
 
 async def test_unauthorized_access_denied(s3):
-    bad = _client(access="easyrs_dev", secret="definitely-wrong-secret")
+    bad = _client(access="easyrs_dev", secret="bad-secret")
     with pytest.raises(ClientError):
         bad.list_objects_v2(Bucket=BUCKET)
     with pytest.raises(ClientError):
