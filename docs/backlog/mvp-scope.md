@@ -2,8 +2,23 @@
 
 > 与 `docs/planning/mvp-release-plan.md` 配套：后者解释**为什么**是这些，本文列出任务级事实。
 > `DEFERRED_IN_TASK` = 任务内被推迟的 Feature（研究阶段 > MVP）。
+> Feature 级唯一处置结论见 `feature-disposition.csv`（本目录，机器可校验）。
 
 MVP 任务数：**24/51**；覆盖 Feature（含被推迟部分）：**83**。
+
+## Feature 级处置统计（167 项，口径统一）
+
+| 处置 | 数量 | 含义 |
+|---|---:|---|
+| CORE | 56 | MVP 内按验收口径实现 |
+| SIMPLIFY | 11 | MVP 内简化交付（削减点见 CSV detail） |
+| MANUAL | 2 | MVP 内以人工操作替代 |
+| DEFER | 3 | 研究-MVP 项移出首个闭环（落点见 CSV） |
+| NOT_IN_MVP | 95 | 研究阶段 P1/P2/P3，本就不属 MVP 候选 |
+
+对账：研究-MVP 72 = CORE+SIMPLIFY+MANUAL+DEFER；NOT_IN_MVP = 95（48+39+8）。
+旧口径 55 核心/5 延期/3 手工 把 KEEP-SEC 混入 CORE、把两个部分交付项算作延期、
+并把两个 P1 期手工项计入——本表已统一为 Feature 级唯一主处置。
 
 | Task | 标题 | Epic | Feature | 其中 >MVP 的 Feature |
 |---|---|---|---|---|

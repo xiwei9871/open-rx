@@ -67,7 +67,8 @@ CATALOG_TEMPLATE.owner_org_id + shared_with edges  (IAM-008 / RX-011 / RX-012)
 
 ## 4. Rx Dashboard & Status
 
-- Rx 状态机见 `state-machines.md` §1。工作台不是独立实体：`SAVED_VIEW`（FLOW-004, S）、`TAG`+`RX_TAG`（COM-009）。
+- Rx 状态机见 `state-machines.md` §1（**仅临床生命周期**）；履约进度是 `rx.fulfillment_status` **投影列**（state-machines §2），由 `shipment.*` 事件驱动、rx 投影消费者独占写入——lab/履约模块从不直写 Rx 状态。
+- 工作台不是独立实体：`SAVED_VIEW`（FLOW-004, S）、`TAG`+`RX_TAG`（COM-009）。
 - "Needed Soon" 预警（FLOW-014, S）= `due_date` 阈值派生，阈值规则 `? UNKNOWN`。
 
 ## 5. Communication & Collaboration
@@ -108,7 +109,7 @@ PROCESSING_JOB 1─1 QA_REPORT
 - **已确认约束**：PTS gingival clearance 至少比 trim margin 小 0.5mm（SRC04 页面所述，需按现行版本再验）。
 - `PROCESSING_JOB` 记输入 hash、recipe 版本、引擎版本、参数快照、输出 hash、执行时长、QA 结论（SAFE-007）。
 - 人工编辑（EDIT-*）= 交互会话产出"参数+结果"也落 PROCESSING_JOB，类型 `manual_edit`，与自动管线同一溯源模型。
-- 打印流转标记 `print_status ∈ {ready, downloaded, printed}`（AI-016）独立于文件加工状态。
+- 打印流转状态归属 `PRINT_QUEUE_ITEM`（state-machines §4）：job `released` 后自动入队，`ready→assigned→printing→printed/downloaded`；**不回写加工 job**（AI-016 语义按此归属，纠偏）。
 
 ## 9. Laboratory Production (MES)
 
@@ -117,15 +118,16 @@ PRODUCTION_ORDER 1─n ORDER_ITEM (product+qty+teeth+price_snapshot)
 WORKFLOW 1─n ACTIVITY 1─n PRODUCTION_OPTION
 PRODUCTION_ORDER 1─n PRODUCTION_STEP (scheduled/actual, operator, equipment, cost)
 PRODUCTION_ORDER 1─1 WORK_TICKET (per step per day?)
-PRODUCTION_ORDER 1─n SHIPMENT 1─n SHIPMENT_EVENT
+PRODUCTION_ORDER 1─n SHIPMENT 1─n SHIPMENT_EVENT      # shipment = 物流唯一事实源
+PROCESSING_JOB 1─0..1 PRINT_QUEUE_ITEM                # released 后入队；打印状态独立
 SERVICE_ORDER → 父 PRODUCTION_ORDER / Rx（Remake/Repair/Refinement 子单）
 HOLD_EVENT (on-hold 原因历史)
 ```
 
-- **Rx 状态 ≠ 生产订单状态**（主报告 §2.1-3）：映射表 `? UNKNOWN`（GAP-15），默认 1 Rx → 1 order `~ PROVISIONAL`。
+- **Rx 状态 ≠ 生产订单状态 ≠ 物流状态**：三者分属三个事实源（state-machines §0 所有权表）；rx↔order 映射 `? UNKNOWN`（GAP-15），默认 1 Rx → 1 order `~ PROVISIONAL`。
+- `SHIPMENT` 是物流唯一事实源：`ready_to_ship→handed_to_logistics` 后才可创建；`received`(到所) 与 `delivered`(交患者) 两事件分离；Rx 只见投影。
 - `ACTIVITY` 可换 `PRODUCTION_OPTION`（人工/打印/外包），各自工时成本，允许非线性单价（SRC09 确认存在，公式 UNKNOWN）。
 - `SERVICE_ORDER.kind ∈ {remake, repair, refinement}`（LAB-017, D2）：必须关联原件，计费规则 `? UNKNOWN`。
-- 收货与交付是两事件（主报告 §4.3）。
 
 ## 10. Finance & Reporting
 
@@ -169,4 +171,5 @@ RETENTION_POLICY (PAT-009 等的保留/清除规则)
 2. 删除策略：患者/处方软删除；FILE_ASSET 原件不删；AUDIT_EVENT 永不删改。
 3. 幂等：提交、check-in、webhook、job 触发全部要求 idempotency key（E2E-07）。
 4. 并发：Rx/模板编辑用乐观锁（version 列），冲突不得静默覆盖（E2E-15）。
-5. 事件：状态迁移一律写领域事件（outbox），事件名见 `state-machines.md` §4。
+5. 事件：状态迁移一律写领域事件（outbox），事件名见 `state-machines.md` §8。
+6. **单写者原则**（A2 纠偏）：每条状态字段只有一个拥有模块可写（state-machines §0 表）；跨模块影响只能经事件+投影，禁止双写。投影列必须标注 `projection`，不接受 API 直接更新。

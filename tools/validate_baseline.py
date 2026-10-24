@@ -28,6 +28,7 @@ INVENTORY_JSON = RESEARCH / "easyrx_inventory_v1.json"
 HASH_FILE = DOCS / "audit" / "research-sha256.txt"
 TRACE_CSV = DOCS / "backlog" / "feature-traceability.csv"
 TASKS_JSON = DOCS / "backlog" / "tasks.json"
+DISPO_CSV = DOCS / "backlog" / "feature-disposition.csv"
 
 VALID_EVIDENCE = {"D1", "D2", "S", "T"}
 VALID_PHASES = {"MVP", "P1", "P2", "P3"}
@@ -55,6 +56,9 @@ REQUIRED_DOCS = [
     "backlog/feature-traceability.csv",
     "backlog/dependency-graph.mmd",
     "backlog/mvp-scope.md",
+    "backlog/feature-disposition.csv",
+    "architecture/authz-test-matrix.md",
+    "research/v1.1-verification-checklist.md",
     "planning/mvp-release-plan.md",
     "poc/stl-processing-poc-plan.md",
     "README.md",
@@ -236,6 +240,32 @@ def main() -> int:
         check("traceability == tasks.json mapping", not missing_pairs, str(missing_pairs[:5]))
     else:
         check("backlog files present", False, "tasks.json or feature-traceability.csv missing")
+
+    # --- 8b. feature disposition table (A5 — one primary per feature) ------------
+    VALID_PRIMARY = {"CORE", "SIMPLIFY", "MANUAL", "DEFER", "NOT_IN_MVP"}
+    if DISPO_CSV.exists():
+        with open(DISPO_CSV, encoding="utf-8-sig", newline="") as f:
+            dr = list(csv.DictReader(f))
+        d_ids = [r["feature_id"] for r in dr]
+        check("disposition covers all 167 features", set(d_ids) == set(ids) and len(d_ids) == 167,
+              f"{len(d_ids)} rows")
+        check("disposition values valid",
+              all(r["primary_disposition"] in VALID_PRIMARY for r in dr),
+              str([r["feature_id"] for r in dr if r["primary_disposition"] not in VALID_PRIMARY][:5]))
+        phase_of = {r["id"]: r["phase"] for r in rows}
+        bad_phase = [r["feature_id"] for r in dr
+                     if (phase_of[r["feature_id"]] == "MVP") != (r["primary_disposition"] != "NOT_IN_MVP")]
+        check("disposition <-> research phase consistent", not bad_phase, str(bad_phase[:5]))
+        from collections import Counter as _C
+        dc = _C(r["primary_disposition"] for r in dr)
+        mvp_total = dc["CORE"] + dc["SIMPLIFY"] + dc["MANUAL"] + dc["DEFER"]
+        check("disposition reconciles: MVP-phase = CORE+SIMPLIFY+MANUAL+DEFER = 72",
+              mvp_total == 72 and dc["NOT_IN_MVP"] == 95, str(dict(dc)))
+        nodetail = [r["feature_id"] for r in dr
+                    if r["primary_disposition"] in {"SIMPLIFY", "MANUAL", "DEFER"} and not r["detail"].strip()]
+        check("SIMPLIFY/MANUAL/DEFER rows carry detail", not nodetail, str(nodetail[:5]))
+    else:
+        check("feature-disposition.csv present", False, "run tools/gen_backlog.py")
 
     # --- 9. openapi + mermaid sanity -----------------------------------------------------------
     oapi = DOCS / "api" / "openapi.yaml"

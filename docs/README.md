@@ -14,6 +14,8 @@
 - [system-design.md](architecture/system-design.md) — 模块化单体+worker 设计
 - [deployment.md](architecture/deployment.md) — 拓扑/环境/备份/上线清单
 - [security-baseline.md](architecture/security-baseline.md) — 威胁模型与工程控制
+- [authz-test-matrix.md](architecture/authz-test-matrix.md) — 跨机构授权/越权/枚举测试矩阵（A3）
+- [research/v1.1-verification-checklist.md](research/v1.1-verification-checklist.md) — V1.1 风险排序核验任务（A6）
 - [adr/](architecture/adr/) — 0001~0007 架构决策记录
 
 ## API

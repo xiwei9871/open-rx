@@ -4,9 +4,12 @@ on:
   push:
   pull_request:
 
+env:
+  REDOCLY_VERSION: "1.25.15"
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -18,14 +21,20 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Baseline + traceability validation
+      - name: Baseline + traceability + disposition validation
         run: python3 tools/validate_baseline.py
 
       - name: Generated backlog drift check
         run: python3 tools/gen_backlog.py --check
 
-      - name: OpenAPI lint
-        run: npx -y @redocly/cli@latest lint docs/api/openapi.yaml --max-problems 400
+      - name: OpenAPI lint (pinned)
+        run: npx -y @redocly/cli@${{ env.REDOCLY_VERSION }} lint docs/api/openapi.yaml --max-problems 400
+
+      - name: OpenAPI bundle for contract check
+        run: npx -y @redocly/cli@${{ env.REDOCLY_VERSION }} bundle docs/api/openapi.yaml -o /tmp/openapi-bundle.json
+
+      - name: MVP contract structure check
+        run: python3 tools/validate_contract.py /tmp/openapi-bundle.json
 
       - name: Secret scan (tracked files)
         run: |

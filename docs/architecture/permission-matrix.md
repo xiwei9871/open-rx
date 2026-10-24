@@ -2,6 +2,7 @@
 
 > **全部内容为临时设计**，未经 EasyRx 实际账号逐角色验证。标注 `?` 的格子表示行为待确认，实现时默认 **deny**。
 > 原则：最小权限 + 显式授权边。跨机构访问必须经 `org_connection` 或限时 `access_grant`；URL/ID 猜测必须 403 且不泄露元数据（E2E-03）。
+> 三层边界（tenant → connection → 对象授权）与测试编排见 `adr/0006-tenancy-and-authz.md` 与 `authz-test-matrix.md`。
 
 ## 1. 角色目录（拟议）
 

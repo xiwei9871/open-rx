@@ -2,17 +2,18 @@
 
 > **MVP 闭环定义**：患者建档 → 创建 Rx → 上传 STL → 实验室接单 → 生产跟踪 → 质检 → 交付。
 > 配套：`docs/backlog/mvp-scope.md`（任务级事实，自动生成）。
-> **再审结论**：72 项研究-MVP 中，**55 项保留 CORE/KEEP**，**11 项降级（DEFER/SIMPLIFY）**，其余以**手工替代或简化形态**交付。MVP 不含任何依赖厂商授权或未验证 AI 的功能。
+> **再审结论（A5 统一口径后）**：167 项 Feature 的唯一主处置见 `docs/backlog/feature-disposition.csv`（机器可校验、CI 强制）。研究-MVP 72 项 = **CORE 56 + SIMPLIFY 11 + MANUAL 2 + DEFER 3**；其余 95 项（P1/P2/P3）为 NOT_IN_MVP。MVP 不含任何依赖厂商授权或未验证 AI 的功能。
+> 旧文本的 KEEP-SEC → CORE + `security-critical` 标签；"CORE+MANUAL" → MANUAL；"SIMPLIFY/DEFER" 部分交付 → SIMPLIFY。
 
 ## 1. 再审口径
 
 | 处置 | 含义 |
 |---|---|
-| CORE | 闭环必需，按现有验收口径实现 |
-| KEEP-SEC | 安全/审计类——**必须第一版内建**，不可后补 |
+| CORE | 闭环必需，按现有验收口径实现（含必须第一版内建的安全/审计项，标 `security-critical`） |
 | SIMPLIFY | 功能保留但首期用简化形态（明确简化点） |
-| DEFER | 移出首个可发布闭环，给出落点 |
+| DEFER | 研究-MVP 项移出首个可发布闭环，给出落点 |
 | MANUAL | 用人工操作替代自动化，标注替代方式 |
+| NOT_IN_MVP | 研究阶段即 P1/P2/P3，非 MVP 候选（仅出现于 disposition CSV） |
 
 ## 2. 逐项处置（72）
 
@@ -134,13 +135,21 @@
 
 ## 3. 处置汇总
 
+> 唯一权威表：`docs/backlog/feature-disposition.csv`（167 行，CI 校验唯一主处置）。
+> 本节数字已按该表统一（旧口径 55/5/3 与自身 72 行不对账的原因：KEEP-SEC 混入 CORE、
+> 两个部分交付项计入 DEFER、两个 P1 手工项计入 MANUAL）。
+
 | 类别 | 数量 | 明细 |
 |---|---:|---|
-| CORE（含简化标记） | 55 | 上表 CORE/SIMPLIFY/KEEP-SEC 合计 |
-| DEFER（移出首个闭环） | 5 | IAM-005、IAM-008、RX-011、SAFE-009（部分）、INT-011（webhook 部分） |
-| 手工替代 | 3 | FLOW-012/LAB-019 承运商、FLOW-015/LAB-016 交付日（本就 P1）、打印列表手工 |
+| CORE | 56 | 含 12 项 `security-critical`（原 KEEP-SEC） |
+| SIMPLIFY | 11 | IAM-010、PAT-006、RX-006/007/008、FLOW-003/014、ASSET-003/010、INT-011、SAFE-009 |
+| MANUAL | 2 | FLOW-012 承运商单号手工录入、LAB-019 手工签收 |
+| DEFER | 3 | IAM-005→P1、IAM-008→P1、RX-011→P1 |
+| NOT_IN_MVP | 95 | P1:48 + P2:39 + P3:8 |
 | 依赖外部厂商 | **0** | MVP 不接任何厂商 API |
 | 依赖未验证 AI | **0** | EPIC-08 全部不在 MVP |
+
+任务级口径另见 `docs/backlog/mvp-scope.md`：MVP 任务 24/51，任务触及 Feature 83 个（含 NOT_IN_MVP 的顺带覆盖项）——任务触及 ≠ Feature 交付承诺，承诺以 disposition CSV 为准。
 
 ## 4. 交付切片（Alpha 顺序）
 

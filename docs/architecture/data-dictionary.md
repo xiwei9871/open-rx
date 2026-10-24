@@ -76,10 +76,12 @@ UK: (org_id, name)~
 | rx_number text | UK(tenant_id) | RX-003；格式 ?；**unsubmit-重提不变** |
 | case_id FK / practice_org_id FK / lab_org_id FK / location_id FK / doctor_id FK→roster_member | | 提交时 lab 需 org_connection.accepted |
 | form_type enum(standard,aligner,idb) | | 子表单 schema 按类型存 `form_payload jsonb` ? |
-| status | 状态机 §1 | IDX(lab_org_id,status), IDX(practice_org_id,status), IDX(due_date) |
+| status | 状态机 §1（仅生命周期：draft…completed/cancelled/reopened） | IDX(lab_org_id,status), IDX(practice_org_id,status), IDX(due_date) |
+| fulfillment_status | **投影列**（none/dispatched/in_transit/received/delivered/exception） | 仅由 `shipment.*` 事件驱动更新；不接受 API 直写（state-machines §2） |
 | due_date date | | RX-002 |
 | version int | | 乐观锁 E2E-15 |
-| submitted_at / checked_in_at / completed_at / shipped_at / received_at / delivered_at | | 状态时间戳分列以便审计 |
+| submitted_at / checked_in_at / completed_at | | 生命周期时间戳 |
+| fulfillment_updated_at / last_shipment_id? | | 投影元数据 |
 
 ### rx_item
 | col | note |
@@ -149,11 +151,18 @@ UK: (org_id, name)~
 | col | constraint | note |
 |---|---|---|
 | input_asset_id FK / recipe_id+recipe_version / engine enum(manual_edit,auto_pipeline,abr,blockout,pts) + engine_version / params_snapshot jsonb | | SAFE-007 溯源 |
-| status 状态机§2 / idempotency_key UK / attempt int / error jsonb | | AI-017 重试/取消 |
+| status 状态机§3（pending…released；**不含打印态**） / idempotency_key UK / attempt int / error jsonb | | AI-017 重试/取消 |
 | output_asset_id FK? / duration_ms | | |
 
 ### qa_report
 `job_id UK`, `checks jsonb`（watertight/自交/边界/壁厚/体积… EDIT-014）, `verdict enum(pass,warn,fail)`, `reviewed_by?`
+
+### print_queue_item（A2 新增——打印流转唯一事实源）
+| col | note |
+|---|---|
+| job_id FK / output_asset_id FK / lab_org_id | released 后由 processing.released 事件入队 |
+| status 状态机§4（queued/ready/assigned/printing/printed/downloaded/failed/cancelled） | AI-016 三标记语义的归属地 |
+| printer_ref? / batch_id? / priority? / attempts int | LAB-020 排产占位 |
 
 ## 9. Lab MES
 
@@ -177,7 +186,8 @@ UK: (org_id, name)~
 | work_ticket | `order_id`,`step_id?`,`payload jsonb`,`printed_at`（LAB-014 D2） |
 | hold_event | `order_id`,`reason`,`started/ended`,`created_by`（LAB-018） |
 | service_order | `parent_order_id`,`kind enum(remake,repair,refinement)`,`charge_policy ?`,`rx_id`（LAB-017/GAP-08） |
-| shipment / shipment_event | `order_id`,`carrier`,`tracking_no`,`events(ts,status)`；`delivered_at` 独立字段（收货≠交付） |
+| shipment | `order_id`, `status`（状态机§6：created/dispatched/in_transit/received/delivered/exception/resolved）, `carrier`, `tracking_no`, `dispatched_at`,`received_at`,`delivered_at` 分列——**物流唯一事实源**（A2）；收货≠交付 |
+| shipment_event | `shipment_id`,`status`,`occurred_at`,`source enum(manual,carrier_webhook?)`,`actor` |
 
 ## 10. Finance
 

@@ -8,6 +8,7 @@ Outputs (all generated — do not hand-edit):
   docs/backlog/dependency-graph.mmd
   docs/backlog/epics.md
   docs/backlog/mvp-scope.md
+  docs/backlog/feature-disposition.csv
 
 --check: regenerate into memory and diff against disk (CI gate).
 """
@@ -22,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 from backlog_tasks import EPICS, TASKS  # noqa: E402
+from feature_disposition import disposition_table  # noqa: E402
 
 FEATURE_CSV = ROOT / "research" / "easyrx_feature_inventory_v1.csv"
 OUT = ROOT / "docs" / "backlog"
@@ -138,8 +140,9 @@ def task_md(t: dict, feats: dict[str, dict]) -> str:
 """
 
 
-def gen(feats: dict[str, dict]) -> dict[str, str]:
+def gen(feats: dict[str, dict]) -> tuple[dict[str, str], list[str]]:
     files: dict[str, str] = {}
+    dispo_rows, dispo_errs = disposition_table(feats)
 
     # tasks.json
     files["tasks.json"] = json.dumps(
@@ -180,6 +183,17 @@ def gen(feats: dict[str, dict]) -> dict[str, str]:
             w.writerow([fid, tid, t["epic"], r["phase"], r["evidence"], t["priority"], r["source_ids"], note])
     files["feature-traceability.csv"] = buf.getvalue()
 
+    # feature disposition csv — exactly one primary disposition per feature
+    if not dispo_errs:
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["feature_id", "phase", "primary_disposition", "labels", "detail"])
+        for r in sorted(dispo_rows, key=lambda x: (x["feature_id"].split("-")[0],
+                                                 int(x["feature_id"].split("-")[1]))):
+            w.writerow([r["feature_id"], r["phase"], r["primary_disposition"],
+                        r["labels"], r["detail"]])
+        files["feature-disposition.csv"] = buf.getvalue()
+
     # dependency graph
     lines = ["flowchart LR"]
     epic_of = {t["id"]: t["epic"] for t in TASKS}
@@ -210,11 +224,25 @@ def gen(feats: dict[str, dict]) -> dict[str, str]:
 
     # mvp-scope.md
     mvp_tasks = [t for t in TASKS if t["priority"] == "MVP"]
+    from collections import Counter
+    dispo_counts = Counter(r["primary_disposition"] for r in dispo_rows)
     lines = ["# MVP 任务范围（任务级视图）", "",
              "> 与 `docs/planning/mvp-release-plan.md` 配套：后者解释**为什么**是这些，本文列出任务级事实。",
              "> `DEFERRED_IN_TASK` = 任务内被推迟的 Feature（研究阶段 > MVP）。",
+             "> Feature 级唯一处置结论见 `feature-disposition.csv`（本目录，机器可校验）。",
              "", f"MVP 任务数：**{len(mvp_tasks)}/{len(TASKS)}**；覆盖 Feature（含被推迟部分）："
              f"**{sum(len(t['feature_ids']) for t in mvp_tasks)}**。",
+             "", "## Feature 级处置统计（167 项，口径统一）", "",
+             "| 处置 | 数量 | 含义 |", "|---|---:|---|",
+             f"| CORE | {dispo_counts['CORE']} | MVP 内按验收口径实现 |",
+             f"| SIMPLIFY | {dispo_counts['SIMPLIFY']} | MVP 内简化交付（削减点见 CSV detail） |",
+             f"| MANUAL | {dispo_counts['MANUAL']} | MVP 内以人工操作替代 |",
+             f"| DEFER | {dispo_counts['DEFER']} | 研究-MVP 项移出首个闭环（落点见 CSV） |",
+             f"| NOT_IN_MVP | {dispo_counts['NOT_IN_MVP']} | 研究阶段 P1/P2/P3，本就不属 MVP 候选 |",
+             "",
+             "对账：研究-MVP 72 = CORE+SIMPLIFY+MANUAL+DEFER；NOT_IN_MVP = 95（48+39+8）。",
+             "旧口径 55 核心/5 延期/3 手工 把 KEEP-SEC 混入 CORE、把两个部分交付项算作延期、",
+             "并把两个 P1 期手工项计入——本表已统一为 Feature 级唯一主处置。",
              "", "| Task | 标题 | Epic | Feature | 其中 >MVP 的 Feature |", "|---|---|---|---|---|"]
     for t in mvp_tasks:
         deferred = [f for f in t["feature_ids"] if PHASE_ORDER[feats[f]["phase"]] > 0]
@@ -223,17 +251,18 @@ def gen(feats: dict[str, dict]) -> dict[str, str]:
               "P1+ 任务整体不在 MVP：3D 编辑链（EPIC-07）、MES 深化（部分 EPIC-09）、财务（EPIC-10）、",
               "厂商集成（EPIC-11 大部，除 TASK-0047 公开 API）与 AI 线（EPIC-08）。详见 mvp-release-plan。", ""]
     files["mvp-scope.md"] = "\n".join(lines)
-    return files
+    return files, dispo_errs
 
 
 def main() -> int:
     feats = load_features()
     errs = validate_tasks(feats)
+    files, dispo_errs = gen(feats)
+    errs += dispo_errs
     if errs:
         for e in errs:
             print("ERR", e)
         return 1
-    files = gen(feats)
     check = "--check" in sys.argv
     drift = []
     for rel, content in files.items():
