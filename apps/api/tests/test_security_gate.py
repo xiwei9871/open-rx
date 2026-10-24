@@ -195,3 +195,53 @@ def _migration_preserves_secret():
         assert dec_totp(bytes.fromhex(hexed)) == secret
     finally:
         _psql("postgres", f"DROP DATABASE IF EXISTS {db}")
+
+
+# ---- S1a1-04: databases that already ran the ORIGINAL 0002 -------------------
+async def test_db_with_original_0002_upgrades_and_stays_fail_closed():
+    """The published pre-fix 0002 dropped totp_secret WITHOUT copying data.
+    DBs that ran it already lost plaintext secrets — no new migration can
+    restore them. Requirements verified here instead:
+    (1) upgrading such a DB to head succeeds;
+    (2) totp_enabled is NOT silently cleared — the account stays fail-closed
+        (login -> totp_recovery_required) until re-enrollment.
+    """
+    await asyncio.to_thread(_legacy_0002_upgrade_path)
+
+
+def _legacy_0002_upgrade_path():
+    db = f"easyrs_mig_{uuid.uuid4().hex[:8]}"
+    _psql("postgres", f"DROP DATABASE IF EXISTS {db}")
+    _psql("postgres", f"CREATE DATABASE {db} OWNER easyrs_admin")
+    try:
+        env = dict(os.environ)
+        env["DATABASE_ADMIN_URL"] = (
+            f"postgresql+asyncpg://easyrs_admin:{ADMIN_PW}"
+            f"@{PG_HOST}:{PG_PORT}/{db}")
+        env["DATABASE_URL"] = env["DATABASE_ADMIN_URL"]
+        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "0001"],
+                       cwd=API_DIR, env=env, check=True,
+                       capture_output=True, text=True)
+        _psql(db, """INSERT INTO user_account
+            (id, email, display_name, password_hash, status, totp_enabled,
+             totp_secret)
+            VALUES (gen_random_uuid(), 'lost@mig.dev', 'Lost', 'x',
+                    'active', true, 'JBSWY3DPEHPK3PXP')""")
+        # Replay the ORIGINAL 0002's column effects manually (it cannot be
+        # rerun: alembic_version is what a real old-0002 DB would carry).
+        _psql(db, "ALTER TABLE user_account ADD COLUMN totp_secret_enc BYTEA")
+        _psql(db, "ALTER TABLE user_account DROP COLUMN totp_secret")
+        _psql(db, "UPDATE alembic_version SET "
+                  "version_num='0002_b01_hardening'")
+        # -> head (0003 + 0004): must apply cleanly on the legacy state
+        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
+                       cwd=API_DIR, env=env, check=True,
+                       capture_output=True, text=True)
+        row = _psql_out(db, "SELECT totp_enabled, "
+                            "totp_secret_enc IS NULL FROM user_account "
+                            "WHERE email='lost@mig.dev'")
+        assert row == "t|t", \
+            "legacy DB must keep totp_enabled=true with NULL secret " \
+            "(fail-closed); silently clearing it would downgrade to 1FA"
+    finally:
+        _psql("postgres", f"DROP DATABASE IF EXISTS {db}")

@@ -88,8 +88,12 @@ def _staging_key(org_id: uuid.UUID, session_id: uuid.UUID) -> str:
     return f"staging/{org_id}/{session_id}"
 
 
-def _asset_key(sha256: str) -> str:
-    return f"assets/{sha256}"
+def _asset_key(tenant_id: uuid.UUID, org_id: uuid.UUID, sha256: str) -> str:
+    """Org-namespaced content key (S1a1-01). Same bytes in two orgs -> two
+    independent objects; no org ever shares a mutable physical object.
+    Legacy flat keys assets/{sha256} remain valid — rows store the exact
+    key, readers never recompute it."""
+    return f"assets/{tenant_id}/{org_id}/{sha256}"
 
 
 async def _ensure_bucket() -> None:
@@ -112,8 +116,14 @@ async def _ensure_bucket() -> None:
 
 
 async def _expire_stale_sessions(db: AsyncSession) -> None:
-    """Opportunistic cleanup (ASSET-010): expired sessions lose their staging
-    objects; failure is best-effort, correctness never depends on it."""
+    """Opportunistic cleanup (ASSET-010/S1a1-02): mark expired sessions and
+    drop their staging objects — best-effort, inside the CALLER's
+    transaction. No commit here: committing mid-request would drop the
+    request-scoped SET LOCAL app.tenant_id and every later tenant-scoped
+    statement would hit deny-all RLS. Cleanup visibility is RLS-filtered
+    to the caller's tenant, which is exactly the authorized scope.
+    Storage failures are swallowed — a missing/dead object must never
+    block a new upload."""
     stale = (await db.execute(select(UploadSession).where(
         UploadSession.status == "open",
         UploadSession.expires_at < datetime.now(UTC)).limit(50))).scalars().all()
@@ -122,10 +132,8 @@ async def _expire_stale_sessions(db: AsyncSession) -> None:
         try:
             await asyncio.to_thread(
                 s3().delete_object, Bucket=_s.s3_bucket, Key=sess.storage_key)
-        except ClientError:
+        except Exception:
             pass
-    if stale:
-        await db.commit()
 
 
 # ---------------- uploads -----------------------------------------------------
@@ -219,7 +227,7 @@ async def complete_upload(session_id: uuid.UUID, body: UploadComplete,
             "code": "invalid_mesh",
             "message": "file is not a recognizable STL mesh"})
 
-    key = _asset_key(digest)
+    key = _asset_key(sess.tenant_id, sess.org_id, digest)
     await asyncio.to_thread(
         s3().copy_object, Bucket=_s.s3_bucket, Key=key,
         CopySource={"Bucket": _s.s3_bucket, "Key": sess.storage_key})
@@ -233,7 +241,7 @@ async def complete_upload(session_id: uuid.UUID, body: UploadComplete,
         asset = Asset(tenant_id=p.tenant_id, org_id=p.org.id,
                       uploaded_by_user_id=p.user.id, sha256=digest,
                       kind=sess.kind, jaw=sess.jaw, bytes=len(content),
-                      storage_key=key, scan_status="clean")
+                      storage_key=key, format_status="format_ok")
         db.add(asset)
     sess.status = "completed"
     await db.flush()
@@ -288,10 +296,10 @@ async def grant_reference(asset_id: uuid.UUID, body: ReferenceCreate,
                           _g=Depends(require_perm("asset:share"))):
     await limit_writes(p)
     asset = await _get_visible_asset(db, p, asset_id, request)
-    if asset.scan_status != "clean":
+    if asset.format_status != "format_ok":
         raise HTTPException(status_code=422, detail={
             "code": "validation_failed",
-            "message": "only clean assets may be referenced"})
+            "message": "only structurally-valid assets may be referenced"})
     if body.subject_type in ("rx", "notification", "order"):
         raise HTTPException(status_code=422, detail={
             "code": "validation_failed",

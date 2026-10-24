@@ -1,9 +1,14 @@
 """S1a-03: content-addressed assets, upload sessions, file references and
-access grants. Tenant-RLS scoped (migration 0003).
+access grants. Tenant-RLS scoped (migration 0003); S1a.1 renames
+scan_status -> format_status (migration 0004): the check is structural
+only — 'format_ok' means the bytes parse as a recognizable mesh, NOT that
+any security or mesh-quality scan ran.
 
-Immutability: storage_key = sha256 of content; no API mutates or deletes an
-asset row. Derived versions link via parent_asset_id (no endpoint yet — the
-chain is reserved for the processing worker).
+Immutability: storage_key is content-addressed per org —
+assets/{tenant_id}/{org_id}/{sha256} for new uploads; rows minted before
+S1a.1 keep flat assets/{sha256} keys and stay reachable verbatim. No API
+mutates or deletes an asset row. Derived versions link via
+parent_asset_id (reserved for the processing worker).
 """
 import uuid
 from datetime import datetime
@@ -22,8 +27,9 @@ class Asset(Base, IdMixin, CreatedAtMixin):
         CheckConstraint("kind IN ('stl','pdf','image','other')",
                         name="ck_asset_kind"),
         CheckConstraint("jaw IN ('upper','lower','na')", name="ck_asset_jaw"),
-        CheckConstraint("scan_status IN ('pending','clean','infected','failed')",
-                        name="ck_asset_scan_status"),
+        CheckConstraint(
+            "format_status IN ('unverified','format_ok','format_rejected')",
+            name="ck_asset_format_status"),
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     org_id: Mapped[uuid.UUID] = mapped_column(
@@ -35,8 +41,8 @@ class Asset(Base, IdMixin, CreatedAtMixin):
     jaw: Mapped[str] = mapped_column(String(8), default="na", server_default="na")
     bytes: Mapped[int] = mapped_column(BigInteger)
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)
-    scan_status: Mapped[str] = mapped_column(String(16), default="pending",
-                                             server_default="pending")
+    format_status: Mapped[str] = mapped_column(
+        String(16), default="unverified", server_default="unverified")
     parent_asset_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("asset.id"), nullable=True)
 

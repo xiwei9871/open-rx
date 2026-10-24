@@ -33,7 +33,7 @@ class AssetOut(BaseModel):
     kind: str
     jaw: str
     parent_asset_id: uuid.UUID | None
-    scan_status: str
+    format_status: str
     bytes: int
     created_at: datetime
 

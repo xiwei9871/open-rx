@@ -80,7 +80,7 @@ const AssetSchema = z.object({
   kind: z.string(),
   jaw: z.string(),
   parent_asset_id: z.string().nullable(),
-  scan_status: z.string(),
+  format_status: z.string(),
   bytes: z.number(),
   created_at: z.string(),
 });

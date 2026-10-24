@@ -1596,14 +1596,14 @@ components:
         sha256: {type: string, pattern: "^[0-9a-f]{64}$", description: "must equal declared hash — server re-verifies"}
     Asset:
       type: object
-      required: [id, sha256, kind, scan_status, bytes]
+      required: [id, sha256, kind, format_status, bytes]
       properties:
         id: {type: string, format: uuid}
         sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
         kind: {type: string, enum: [stl, pdf, image, other]}
         jaw: {type: string, enum: [upper, lower, na]}
         parent_asset_id: {type: [string, "null"], format: uuid, description: "version chain; originals have null and are immutable"}
-        scan_status: {type: string, enum: [pending, clean, infected, failed], readOnly: true, description: "only 'clean' may be referenced"}
+        format_status: {type: string, enum: [unverified, format_ok, format_rejected], readOnly: true, description: "structural recognition only — format_ok is NOT a security/quality scan; only format_ok may be referenced"}
         bytes: {type: integer}
         created_at: {type: string, format: date-time, readOnly: true}
     FileReference:
@@ -1620,7 +1620,7 @@ components:
       type: object
       required: [asset_id, role]
       properties:
-        asset_id: {type: string, format: uuid, description: "must be scan_status=clean"}
+        asset_id: {type: string, format: uuid, description: "must be format_status=format_ok"}
         role: {type: string, enum: [original, attachment]}
     ReferenceCreate:
       type: object

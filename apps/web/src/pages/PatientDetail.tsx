@@ -147,7 +147,7 @@ export default function PatientDetailPage({ me, patientId, onDeleted }: {
         <ul>{assets.map((a) => (
           <li key={a.id}>
             {a.asset.kind}/{a.asset.jaw} — {a.asset.bytes} bytes —
-            sha256 {a.asset.sha256.slice(0, 16)}… — {a.asset.scan_status}
+            sha256 {a.asset.sha256.slice(0, 16)}… — {a.asset.format_status}
             {" "}<button type="button" onClick={async () => {
               const u = await downloadUrl(a.asset_id); window.open(u, "_blank");
             }}>Download</button>
