@@ -1,0 +1,271 @@
+name: baseline-validate
+
+on:
+  push:
+  pull_request:
+
+env:
+  REDOCLY_VERSION: "1.25.15"
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Baseline + traceability + disposition validation
+        run: python3 tools/validate_baseline.py
+
+      - name: Generated backlog drift check
+        run: python3 tools/gen_backlog.py --check
+
+      - name: OpenAPI lint (pinned)
+        run: npx -y @redocly/cli@${{ env.REDOCLY_VERSION }} lint docs/api/openapi.yaml --max-problems 400
+
+      - name: OpenAPI bundle for contract check
+        run: npx -y @redocly/cli@${{ env.REDOCLY_VERSION }} bundle docs/api/openapi.yaml -o /tmp/openapi-bundle.json
+
+      - name: MVP contract structure check
+        run: python3 tools/validate_contract.py /tmp/openapi-bundle.json
+
+      - name: Secret scan (tracked files)
+        run: |
+          set -e
+          ! grep -rInE '(api[_-]?key|password|secret)[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9_\-]{16,}' \
+            --exclude-dir=.git . || { echo "possible secret committed"; exit 1; }
+
+      - name: PHI / banned file types
+        run: |
+          set -e
+          ! git ls-files | grep -iE '\.(stl|dcm|dicom)$' || { echo "banned file type committed"; exit 1; }
+
+  api-tests:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: easyrs_admin
+          POSTGRES_PASSWORD: ci_admin_pw
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U easyrs_admin -d postgres"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psql client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Create least-privilege runtime role (mirrors infra/postgres/init)
+        run: |
+          psql "postgresql://easyrs_admin:ci_admin_pw@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE easyrs_app LOGIN PASSWORD 'ci_app_pw';
+          SQL
+
+      - name: Install API deps
+        run: pip install -r apps/api/requirements.txt
+
+      - name: Alembic migrate + pytest (migration/auth/isolation/rbac/security/contract)
+        env:
+          TEST_PG_HOST: localhost
+          TEST_PG_PORT: "5432"
+          POSTGRES_ADMIN_PASSWORD: ci_admin_pw
+          POSTGRES_APP_PASSWORD: ci_app_pw
+          SECRET_KEY: ci-not-a-real-secret
+          SESSION_SECRET: ci-not-a-real-secret
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          cd apps/api
+          python -m pytest -q --junitxml=/tmp/api-results.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          r = ET.parse("/tmp/api-results.xml").getroot()
+          for s in r.iter("testsuite"):
+              print(f"API_TESTS tests={s.get('tests')} failures={s.get('failures')} errors={s.get('errors')} skipped={s.get('skipped')}")
+          PY
+
+  s3-compat:
+    runs-on: ubuntu-24.04
+    services:
+      rustfs:
+        # same pinned digest as infra/docker-compose.yml
+        image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+        env:
+          RUSTFS_ACCESS_KEY: ci_s3_key
+          RUSTFS_SECRET_KEY: ci_s3_secret_key
+        ports: ["9000:9000"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: pip install boto3==1.35.81 pytest==8.3.4 pytest-asyncio==0.25.0 pydantic-settings==2.6.1 httpx==0.28.1
+      - name: Wait for store
+        run: |
+          for i in $(seq 1 30); do curl -sf http://localhost:9000/health && break || sleep 2; done
+      - name: S3 API compat suite (crud/sha256/presign/deny/multipart/large)
+        env:
+          S3_COMPAT: "1"
+          ENV: test
+          S3_ENDPOINT_URL: http://localhost:9000
+          S3_ACCESS_KEY: ci_s3_key
+          S3_SECRET_KEY: ci_s3_secret_key
+          TEST_PG_HOST: localhost
+          TEST_PG_PORT: "15432"
+          DATABASE_URL: postgresql+asyncpg://unused:unused@localhost:15432/unused
+        run: |
+          cd apps/api
+          python -m pytest -q tests/test_s3_compat.py --junitxml=/tmp/s3-results.xml \
+            -k 'not restart'
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          r = ET.parse("/tmp/s3-results.xml").getroot()
+          for s in r.iter("testsuite"):
+              print(f"S3_TESTS tests={s.get('tests')} failures={s.get('failures')} errors={s.get('errors')} skipped={s.get('skipped')}")
+          PY
+
+  asset-integration:
+    # S1a1-03: test_assets.py must EXECUTE against real rustfs — never
+    # green-by-skip. REQUIRE_S3=1 makes missing storage a hard failure and
+    # the junit gate fails on any skipped test.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: easyrs_admin
+          POSTGRES_PASSWORD: ci_admin_pw
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U easyrs_admin -d postgres"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+      rustfs:
+        # same pinned digest as infra/docker-compose.yml
+        image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+        env:
+          RUSTFS_ACCESS_KEY: ci_s3_key
+          RUSTFS_SECRET_KEY: ci_s3_secret_key
+        ports: ["9000:9000"]
+    env:
+      TEST_PG_HOST: localhost
+      TEST_PG_PORT: "5432"
+      POSTGRES_ADMIN_PASSWORD: ci_admin_pw
+      POSTGRES_APP_PASSWORD: ci_app_pw
+      SECRET_KEY: ci-not-a-real-secret
+      SESSION_SECRET: ci-not-a-real-secret
+      REDIS_URL: redis://localhost:6379/0
+      REQUIRE_S3: "1"
+      ENV: test
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_ACCESS_KEY: ci_s3_key
+      S3_SECRET_KEY: ci_s3_secret_key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install psql client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Create least-privilege runtime role (mirrors infra/postgres/init)
+        run: |
+          psql "postgresql://easyrs_admin:ci_admin_pw@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE easyrs_app LOGIN PASSWORD 'ci_app_pw';
+          SQL
+      - name: Install API deps
+        run: pip install -r apps/api/requirements.txt
+      - name: Wait for rustfs
+        run: |
+          for i in $(seq 1 30); do curl -sf http://localhost:9000/health && break || sleep 2; done
+      - name: Asset + Rx bundle integration tests (must run — no skips allowed)
+        run: |
+          cd apps/api
+          python -m pytest -q tests/test_assets.py tests/test_rx_s1b1.py \
+            tests/test_rx_finalgate.py \
+            --junitxml=/tmp/asset-results.xml || true
+          python - <<'PY'
+          import xml.etree.ElementTree as ET, sys
+          r = ET.parse("/tmp/asset-results.xml").getroot()
+          for s in r.iter("testsuite"):
+              t, sk, f, e = (int(s.get(k, 0)) for k in
+                             ("tests", "skipped", "failures", "errors"))
+              print(f"ASSET_TESTS tests={t} failures={f} errors={e} skipped={sk}")
+              if sk or f or e or not t:
+                  sys.exit(f"asset gate failed: skipped={sk} failures={f} errors={e}")
+          PY
+
+  e2e:
+    runs-on: ubuntu-24.04
+    env:
+      POSTGRES_ADMIN_PASSWORD: ci_admin_pw
+      POSTGRES_APP_PASSWORD: ci_app_pw
+      MINIO_ROOT_USER: ci_s3_key
+      MINIO_ROOT_PASSWORD: ci_s3_secret_key
+      SEED_SYNTHETIC: "true"
+      SESSION_SECRET: ci-not-a-real-secret
+      CORS_ORIGINS: http://localhost:5173
+      E2E_BASE_URL: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Compose stack (postgres/redis/rustfs/migrate/api/web)
+        run: docker compose -f infra/docker-compose.yml up -d --build
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 60); do curl -sf http://localhost:8000/healthz && break || sleep 3; done
+          curl -sf http://localhost:5173/ -o /dev/null
+      - name: Playwright
+        run: |
+          cd apps/web
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npx playwright test --reporter=list,html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  web-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Frontend typecheck + build
+        run: cd apps/web && npm ci --no-audit --no-fund && npm run build

@@ -1,0 +1,1742 @@
+openapi: 3.1.0
+info:
+  title: EasyRS — Orthodontic Rx & Lab Production API
+  version: 0.2.0-draft
+  description: >-
+    Stage A.1 contract draft. Operations carrying request/response schemas are
+    the MVP S0–S2 surface and are intended for codegen, mocks, and contract
+    tests. Operations without schemas remain design placeholders —
+    "x-status: provisional" endpoints MUST NOT be implemented as final
+    behavior until V1.1 verification. Tenant scope is implicit via auth;
+    cross-org visibility is governed by org_connection + object grants.
+  license:
+    name: TBD — see ADR-0007 (license not yet selected)
+servers:
+  - url: https://api.example.invalid/v1
+    description: placeholder — deployments define their own base URL
+
+tags:
+  - {name: iam, description: "Organizations, locations, members, roster, connections"}
+  - {name: patients, description: "Patient registry and treatment cases"}
+  - {name: prescriptions, description: "Rx authoring, submission, status, catalog, templates"}
+  - {name: collaboration, description: "Comments, clinical notifications, approvals, tags, views"}
+  - {name: assets, description: "Immutable file assets, references, uploads, print queue"}
+  - {name: processing, description: "3D processing recipes, jobs, QC, command center"}
+  - {name: production, description: "Lab MES: orders, steps, shipments, service orders"}
+  - {name: finance, description: "Price lists, invoices, payments, reports (P2)"}
+  - {name: integrations, description: "Vendor connections, scan events, webhooks, desktop agent"}
+  - {name: platform, description: "Audit, data export, health"}
+
+paths:
+  # ======================== S0: orgs / identity ========================
+  /orgs:
+    get:
+      tags: [iam]
+      operationId: listOrgs
+      summary: "List orgs visible to caller"
+      x-scope: any authenticated user
+      responses:
+        "200":
+          description: "Page of orgs"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Org"}}, next_cursor: {type: [string, "null"]}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [iam]
+      operationId: createOrg
+      summary: "Create organization"
+      x-scope: platform operator / tenant admin
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/OrgCreate"}}}
+      responses:
+        "201":
+          description: "Created org"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Org"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /orgs/{orgId}/locations:
+    get:
+      tags: [iam]
+      operationId: listLocations
+      summary: "List locations"
+      x-scope: org member
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses:
+        "200":
+          description: "Locations"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Location"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [iam]
+      operationId: createLocation
+      summary: "Add location"
+      x-scope: org_admin
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/LocationCreate"}}}
+      responses:
+        "201":
+          description: "Created location"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Location"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /orgs/{orgId}/members:
+    get:
+      tags: [iam]
+      operationId: listMembers
+      summary: "List memberships"
+      x-scope: org_admin
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses:
+        "200":
+          description: "Memberships"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Membership"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [iam]
+      operationId: inviteMember
+      summary: "Invite member (role required)"
+      x-scope: org_admin
+      x-idempotent: false
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/MemberInvite"}}}
+      responses:
+        "201":
+          description: "Membership invited"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Membership"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /orgs/{orgId}/roster:
+    get:
+      tags: [iam]
+      operationId: listRoster
+      summary: "Doctor and clinical staff roster"
+      x-scope: org member
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      responses:
+        "200":
+          description: "Roster"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/RosterMember"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [iam]
+      operationId: addRosterMember
+      summary: "Add roster member (need not be a login user)"
+      x-scope: org_admin
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/RosterMemberCreate"}}}
+      responses:
+        "201":
+          description: "Created roster member"
+          content: {application/json: {schema: {$ref: "#/components/schemas/RosterMember"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /org-connections:
+    get:
+      tags: [iam]
+      operationId: listOrgConnections
+      summary: "List practice↔lab connections for caller's orgs"
+      x-scope: org member (own org only)
+      parameters:
+        - {name: org_id, in: query, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: "Connections"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/OrgConnection"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [iam]
+      operationId: requestOrgConnection
+      summary: "Request practice↔lab connection"
+      x-scope: org_admin of requesting org
+      x-idempotent: "natural key (practice_org_id, lab_org_id) — repeat returns existing"
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/OrgConnectionRequest"}}}
+      responses:
+        "201":
+          description: "Connection pending"
+          content: {application/json: {schema: {$ref: "#/components/schemas/OrgConnection"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /org-connections/{connectionId}:
+    patch:
+      tags: [iam]
+      operationId: transitionOrgConnection
+      summary: "decide or mutate a connection (direction-aware)"
+      x-status: provisional
+      x-scope: "org_admin; accept/reject: counterparty only; withdraw: initiator only; revoke: either side on accepted (EasyRS decision, V-14 pending)"
+      parameters: [$ref: "#/components/parameters/ConnectionId"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, expected_version]
+              properties:
+                action: {type: string, enum: [accept, reject, withdraw, revoke]}
+                expected_version: {type: integer, minimum: 0}
+                granted_scopes:
+                  type: [array, "null"]
+                  items: {type: string}
+                  description: "accept only; may narrow but never expand the requested scopes"
+      responses:
+        "200":
+          description: "Updated connection"
+          content: {application/json: {schema: {$ref: "#/components/schemas/OrgConnection"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+
+  # ======================== S1: patients / rx authoring ========================
+  /patients:
+    get:
+      tags: [patients]
+      operationId: searchPatients
+      summary: "Search by name fragment, dob, external_ref"
+      x-scope: org member with patient access
+      parameters:
+        - {name: q, in: query, schema: {type: string, minLength: 1}}
+        - {name: external_ref, in: query, schema: {type: string}}
+        - {name: dob, in: query, schema: {type: string, format: date}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 25}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: "Patient page (never includes other orgs' patients)"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Patient"}}, next_cursor: {type: [string, "null"]}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [patients]
+      operationId: createPatient
+      summary: "Create patient"
+      x-scope: practice_admin | practice_doctor | practice_staff(? strict side)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/PatientCreate"}}}
+      responses:
+        "201":
+          description: "Created patient"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Patient"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409":
+          description: "Possible duplicate — caller must confirm or merge explicitly"
+          content: {application/json: {schema: {$ref: "#/components/schemas/DuplicateCandidate"}}}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /patients/{patientId}:
+    get:
+      tags: [patients]
+      operationId: getPatient
+      summary: "Get patient"
+      x-scope: member of owning org
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "200":
+          description: "Patient"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Patient"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    patch:
+      tags: [patients]
+      operationId: updatePatient
+      summary: "Update patient (If-Match optimistic lock)"
+      x-scope: org member with patient write
+      parameters:
+        - $ref: "#/components/parameters/PatientId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/PatientUpdate"}}}
+      responses:
+        "200":
+          description: "Updated patient"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Patient"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    delete:
+      tags: [patients]
+      operationId: deletePatient
+      summary: "Soft-delete (retention policy applies)"
+      x-scope: practice_admin
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "204": {description: "Deleted (soft)"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422":
+          description: "Blocked — active in-flight Rx exists (PROVISIONAL rule)"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  /patients/{patientId}/cases:
+    get:
+      tags: [patients]
+      operationId: listCases
+      summary: "List treatment cases"
+      x-scope: member of owning org
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "200":
+          description: "Cases"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/TreatmentCase"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [patients]
+      operationId: createCase
+      summary: "Open treatment case"
+      x-scope: org member with patient write
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/CaseCreate"}}}
+      responses:
+        "201":
+          description: "Created case"
+          content: {application/json: {schema: {$ref: "#/components/schemas/TreatmentCase"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /patients/{patientId}/assets:
+    get:
+      tags: [patients]
+      operationId: listPatientAssets
+      summary: "Live file references to assets on this patient or its cases (S1a extension)"
+      x-status: provisional
+      x-scope: member of owning org
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "200":
+          description: "File references joined with asset metadata"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {type: object}
+                  next_cursor: {type: [string, "null"]}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /patients/{patientId}/rx-history:
+    get:
+      tags: [patients]
+      operationId: patientRxHistory
+      summary: "Patient prescription history"
+      x-scope: member of owning org
+      parameters: [$ref: "#/components/parameters/PatientId"]
+      responses:
+        "200":
+          description: "Rx history page"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Rx"}}, next_cursor: {type: [string, "null"]}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  /rx:
+    get:
+      tags: [prescriptions]
+      operationId: listRx
+      summary: "Dashboard list with status/date/office/doctor/lab/tag filters"
+      x-scope: org member (practice sees own issued, lab sees received)
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: date_from, in: query, schema: {type: string, format: date}}
+        - {name: date_to, in: query, schema: {type: string, format: date}}
+        - {name: location_id, in: query, schema: {type: string, format: uuid}}
+        - {name: doctor_id, in: query, schema: {type: string, format: uuid}}
+        - {name: tag_id, in: query, schema: {type: string, format: uuid}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 25}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: "Rx page"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Rx"}}, next_cursor: {type: [string, "null"]}, counts: {type: object, additionalProperties: {type: integer}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [prescriptions]
+      operationId: createRx
+      summary: "Create draft Rx"
+      x-scope: practice_admin | practice_doctor | practice_staff(?)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/RxCreate"}}}
+      responses:
+        "201":
+          description: "Created draft"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /rx/{rxId}:
+    get:
+      tags: [prescriptions]
+      operationId: getRx
+      summary: "Get Rx"
+      x-scope: issuing practice member | receiving lab member (accepted+submitted)
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Rx"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    patch:
+      tags: [prescriptions]
+      operationId: updateRx
+      summary: "Edit draft (If-Match version; rejected once submitted)"
+      x-scope: issuing practice member with rx write
+      x-state-transition: "only allowed while status=draft"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/RxUpdate"}}}
+      responses:
+        "200":
+          description: "Updated Rx"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/items:
+    put:
+      tags: [prescriptions]
+      operationId: replaceRxItems
+      summary: "Replace parts, appliances, and tooth operations"
+      x-scope: issuing practice member with rx write
+      x-state-transition: "only while status=draft"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/RxItemsReplace"}}}
+      responses:
+        "200":
+          description: "Replaced items"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/RxItem"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /rx/{rxId}/submit:
+    post:
+      tags: [prescriptions]
+      operationId: submitRx
+      summary: "Submit Rx to connected lab"
+      x-scope: issuing practice member with rx submit
+      x-idempotent: "Idempotency-Key required; replay returns first result; same key + different payload = 409"
+      x-state-transition: "draft -> submitted; requires org_connection=accepted"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content: {application/json: {schema: {$ref: "#/components/schemas/RxSubmit"}}}
+      responses:
+        "200":
+          description: "Submitted (or replayed first result)"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409":
+          description: "VersionConflict or IdempotencyKeyPayloadMismatch"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+        "422":
+          description: "NoAcceptedConnection | ValidationFailed | IllegalTransition"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  /rx/{rxId}/unsubmit:
+    post:
+      tags: [prescriptions]
+      operationId: unsubmitRx
+      summary: "Pull back to draft (blocked once checked_in)"
+      x-scope: issuing practice member
+      x-state-transition: "submitted -> draft; forbidden when status >= checked_in"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: [string, "null"], maxLength: 500}
+      responses:
+        "200":
+          description: "Back to draft"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409":
+          description: "AlreadyCheckedIn or VersionConflict"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  /rx/{rxId}/check-in:
+    post:
+      tags: [prescriptions]
+      operationId: checkInRx
+      summary: "Lab check-in — explicit act; lab-side bundle download (GET /rx/{rxId}/bundle) also checks in (CONFIRMED SRC03)"
+      x-scope: receiving lab member (check-in role)
+      x-idempotent: "repeat returns current state"
+      x-state-transition: "submitted -> checked_in"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: {type: [string, "null"], maxLength: 500}
+      responses:
+        "200":
+          description: "Checked in"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/bundle:
+    get:
+      tags: [prescriptions]
+      operationId: listRxBundles
+      summary: "List prepared delivery bundles — pure read, never transitions (safe for browser prefetch)"
+      x-scope: issuing practice member | receiving lab member
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Bundle metadata"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/RxBundle"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /rx/{rxId}/bundle-download:
+    post:
+      tags: [prescriptions]
+      operationId: downloadRxBundle
+      summary: "Accept the delivery bundle — builds+verifies the ZIP (prescription.pdf, manifest.json, attachments/*) and returns a short-lived URL; for the addressed lab on a submitted Rx this IS check-in (CONFIRMED SRC03)"
+      x-state-transition: "submitted -> checked_in (via=download), lab side only; build failure leaves Rx untouched"
+      x-idempotent: "repeat for same rx_version reuses the ready bundle — no duplicate package or second check-in event"
+      x-scope: issuing practice member | receiving lab member
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Bundle + presigned download URL"
+          content: {application/json: {schema: {type: object, properties: {bundle: {$ref: "#/components/schemas/RxBundle"}, download_url: {type: string, format: uri}, expires_in: {type: integer}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+        "502": {description: "bundle build/verification or storage failed — Rx state unchanged"}
+  /rx/{rxId}/transitions:
+    get:
+      tags: [prescriptions]
+      operationId: listRxTransitions
+      summary: "Auditable status trail (append-only)"
+      x-scope: as getRx
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Transition history"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {type: object}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /rx/{rxId}/transition:
+    post:
+      tags: [prescriptions]
+      operationId: transitionRx
+      summary: "Lifecycle transition (in_progress|on_hold|resume|complete|cancel|reopen) — fulfillment lives on shipments"
+      x-status: provisional
+      x-state-transition: "see state-machines.md §1 transition table"
+      x-scope: per state-machine transition table
+      parameters: [$ref: "#/components/parameters/RxId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/RxTransition"}}}
+      responses:
+        "200":
+          description: "Updated Rx"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/attachments:
+    post:
+      tags: [prescriptions]
+      operationId: attachToRx
+      summary: "Attach file reference (post-submit manual attach allowed; auto-scanner attach is draft-only)"
+      x-scope: issuing practice member | receiving lab (own attachments)
+      parameters: [$ref: "#/components/parameters/RxId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/AttachmentCreate"}}}
+      responses:
+        "201":
+          description: "File reference created"
+          content: {application/json: {schema: {$ref: "#/components/schemas/FileReference"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /rx/{rxId}/pdf:
+    get:
+      tags: [prescriptions]
+      operationId: listRxPdfs
+      summary: "List PDF versions"
+      x-scope: as getRx
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "PDF versions"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/RxPdf"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [prescriptions]
+      operationId: renderRxPdf
+      summary: "Render Rx PDF (new immutable version)"
+      x-scope: as getRx
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "202":
+          description: "Render job accepted"
+          content: {application/json: {schema: {$ref: "#/components/schemas/AsyncJob"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /rx/{rxId}/comments:
+    get:
+      tags: [collaboration]
+      operationId: listRxComments
+      summary: "List comments"
+      x-scope: parties with rx read
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Comments"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Comment"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      tags: [collaboration]
+      operationId: createRxComment
+      summary: "Add comment"
+      x-scope: parties with rx read (participating orgs only)
+      parameters: [$ref: "#/components/parameters/RxId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/CommentCreate"}}}
+      responses:
+        "201":
+          description: "Created comment"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Comment"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+
+  # ======================== S1: uploads / assets ========================
+  /uploads:
+    post:
+      tags: [assets]
+      operationId: declareUpload
+      summary: "Declare upload -> session + presigned part URLs"
+      x-scope: org member with upload permission
+      x-idempotent: "natural key (sha256+bytes) — repeat returns existing session"
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/UploadDeclare"}}}
+      responses:
+        "201":
+          description: "Upload session (or existing session for same hash)"
+          content: {application/json: {schema: {$ref: "#/components/schemas/UploadSession"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /uploads/{sessionId}/complete:
+    post:
+      tags: [assets]
+      operationId: completeUpload
+      summary: "Finalize upload -> quarantine scan; returns asset only after scan starts"
+      x-scope: session owner
+      parameters: [$ref: "#/components/parameters/SessionId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/UploadComplete"}}}
+      responses:
+        "202":
+          description: "Accepted — quarantine scan in progress"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Asset"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /assets/{assetId}:
+    get:
+      tags: [assets]
+      operationId: getAsset
+      summary: "Get asset metadata (never returns content)"
+      x-scope: holder of a live file_reference or grant
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      responses:
+        "200":
+          description: "Asset meta"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Asset"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /assets/{assetId}/download:
+    post:
+      tags: [assets]
+      operationId: downloadAsset
+      summary: "Mint access_grant + presigned URL (audited)"
+      x-scope: holder of a live file_reference
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      requestBody:
+        required: false
+        content: {application/json: {schema: {$ref: "#/components/schemas/DownloadRequest"}}}
+      responses:
+        "200":
+          description: "Signed URL"
+          content: {application/json: {schema: {$ref: "#/components/schemas/SignedUrl"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /assets/{assetId}/references:
+    post:
+      tags: [assets]
+      operationId: grantAssetReference
+      summary: "Grant reference to patient/rx/notification/order"
+      x-scope: org member with share permission on subject
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/ReferenceCreate"}}}
+      responses:
+        "201":
+          description: "File reference"
+          content: {application/json: {schema: {$ref: "#/components/schemas/FileReference"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    delete:
+      tags: [assets]
+      operationId: revokeAssetReference
+      summary: "Revoke reference"
+      x-scope: granting org admin | subject owner
+      parameters: [$ref: "#/components/parameters/AssetId"]
+      responses:
+        "204": {description: "Revoked"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /print-queue:
+    get:
+      tags: [assets]
+      operationId: printQueue
+      summary: "STL print list"
+      x-status: provisional
+      x-scope: lab member
+      responses: {"200": {description: "PrintList"}}
+
+  # ======================== S2: collaboration / notifications ========================
+  /notifications:
+    get:
+      tags: [collaboration]
+      operationId: listNotifications
+      summary: "Inbox with kind/status filters"
+      x-scope: authenticated user (own inbox)
+      parameters:
+        - {name: kind, in: query, schema: {type: string, enum: [info, ack_required, approval_required, email_only]}}
+        - {name: status, in: query, schema: {type: string, enum: [unread, read, resolved]}}
+      responses:
+        "200":
+          description: "Notifications"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Notification"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [collaboration]
+      operationId: createNotification
+      summary: "Create clinical notification (info|ack|approval|email_only)"
+      x-scope: lab member on received rx | practice member on own rx
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/NotificationCreate"}}}
+      responses:
+        "201":
+          description: "Created notification"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Notification"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /notifications/{notificationId}/decision:
+    post:
+      tags: [collaboration]
+      operationId: decideNotification
+      summary: "Approve/reject with e-signature bound to rx version"
+      x-scope: designated approver (doctor)
+      x-idempotent: "one decision per notification; Idempotency-Key guards double-click"
+      parameters:
+        - $ref: "#/components/parameters/NotificationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/DecisionRequest"}}}
+      responses:
+        "200":
+          description: "Recorded approval"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Approval"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409":
+          description: "VersionDrift — rx changed since request; re-confirm required"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /tags:
+    get:
+      tags: [collaboration]
+      operationId: listTags
+      summary: "List tags"
+      responses: {"200": {description: "Tags"}}
+    post:
+      tags: [collaboration]
+      operationId: createTag
+      summary: "Create tag"
+      responses: {"201": {description: "Tag"}}
+  /saved-views:
+    get:
+      tags: [collaboration]
+      operationId: listSavedViews
+      summary: "List saved dashboard views"
+      responses: {"200": {description: "Views"}}
+    post:
+      tags: [collaboration]
+      operationId: createSavedView
+      summary: "Save view (filters, default flag)"
+      responses: {"201": {description: "View"}}
+
+  # ======================== catalog / templates ========================
+  /catalog/parts:
+    get:
+      tags: [prescriptions]
+      operationId: listParts
+      summary: "Search parts library"
+      x-scope: org member
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: "Parts"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/CatalogPart"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /catalog/appliances:
+    get:
+      tags: [prescriptions]
+      operationId: listAppliances
+      summary: "Appliance library"
+      x-scope: org member
+      responses:
+        "200":
+          description: "Appliances"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/CatalogAppliance"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /templates:
+    get:
+      tags: [prescriptions]
+      operationId: listTemplates
+      summary: "Templates visible to org (own + shared)"
+      x-scope: org member
+      responses:
+        "200":
+          description: "Templates"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/RxTemplate"}}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [prescriptions]
+      operationId: createTemplate
+      summary: "Save template"
+      x-scope: org member with template write
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/TemplateCreate"}}}
+      responses:
+        "201":
+          description: "Created template"
+          content: {application/json: {schema: {$ref: "#/components/schemas/RxTemplate"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /templates/{templateId}/shares:
+    post:
+      tags: [prescriptions]
+      operationId: shareTemplate
+      summary: "Share to practice org (view|copy|edit)"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/TemplateId"]
+      responses: {"201": {description: "Share"}}
+
+  # ======================== processing (P1+) ========================
+  /processing-recipes:
+    get:
+      tags: [processing]
+      operationId: listRecipes
+      summary: "List recipes"
+      responses: {"200": {description: "Recipes"}}
+    post:
+      tags: [processing]
+      operationId: createRecipe
+      summary: "Create recipe (new immutable version)"
+      responses: {"201": {description: "Recipe"}}
+  /processing-jobs:
+    get:
+      tags: [processing]
+      operationId: listProcessingJobs
+      summary: "Job list (status filter)"
+      responses:
+        "200":
+          description: "Job page"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/ProcessingJob"}}, next_cursor: {type: [string, "null"]}}}}}
+    post:
+      tags: [processing]
+      operationId: requestProcessingJob
+      summary: "Request processing (idempotent)"
+      parameters: [$ref: "#/components/parameters/IdempotencyKey"]
+      responses:
+        "202":
+          description: "Job"
+          content: {application/json: {schema: {$ref: "#/components/schemas/ProcessingJob"}}}
+  /processing-jobs/{jobId}:
+    get:
+      tags: [processing]
+      operationId: getProcessingJob
+      summary: "Get job"
+      parameters: [$ref: "#/components/parameters/JobId"]
+      responses:
+        "200":
+          description: "Job"
+          content: {application/json: {schema: {$ref: "#/components/schemas/ProcessingJob"}}}
+  /processing-jobs/{jobId}/cancel:
+    post:
+      tags: [processing]
+      operationId: cancelProcessingJob
+      summary: "Cancel job (graceful)"
+      parameters: [$ref: "#/components/parameters/JobId"]
+      responses:
+        "200":
+          description: "Job"
+          content: {application/json: {schema: {$ref: "#/components/schemas/ProcessingJob"}}}
+  /processing-jobs/{jobId}/decision:
+    post:
+      tags: [processing]
+      operationId: decideProcessingJob
+      summary: "QC approve/reject"
+      parameters: [$ref: "#/components/parameters/JobId"]
+      responses:
+        "200":
+          description: "Job"
+          content: {application/json: {schema: {$ref: "#/components/schemas/ProcessingJob"}}}
+  /command-center/scans:
+    get:
+      tags: [processing]
+      operationId: commandCenterScans
+      summary: "Inbound scan queue + processing status"
+      x-status: provisional
+      responses: {"200": {description: "ScanQueue"}}
+
+  # ======================== production (P1+) ========================
+  /production-orders:
+    get:
+      tags: [production]
+      operationId: listProductionOrders
+      summary: "List production orders"
+      responses: {"200": {description: "OrderPage"}}
+    post:
+      tags: [production]
+      operationId: createProductionOrder
+      summary: "Create order (from Rx or manual entry)"
+      responses: {"201": {description: "Order"}}
+  /production-orders/{orderId}:
+    get:
+      tags: [production]
+      operationId: getProductionOrder
+      summary: "Get order"
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses: {"200": {description: "Order"}}
+  /production-orders/{orderId}/steps:
+    get:
+      tags: [production]
+      operationId: listProductionSteps
+      summary: "List steps"
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses: {"200": {description: "Steps"}}
+    post:
+      tags: [production]
+      operationId: planProductionStep
+      summary: "Plan step (activity + option)"
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses: {"201": {description: "Step"}}
+  /production-orders/{orderId}/transition:
+    post:
+      tags: [production]
+      operationId: transitionProductionOrder
+      summary: "hold|resume|qc|ready_to_ship|close"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses:
+        "200": {description: "Order"}
+        "422": {description: "IllegalTransition"}
+  /production-orders/{orderId}/shipments:
+    post:
+      tags: [production]
+      operationId: createShipment
+      summary: "Create shipment for order (requires ready_to_ship)"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/OrderId"]
+      responses:
+        "201": {description: "Shipment"}
+        "422": {description: "OrderNotReadyToShip"}
+  /service-orders:
+    post:
+      tags: [production]
+      operationId: createServiceOrder
+      summary: "Remake|repair|refinement child order"
+      responses: {"201": {description: "ServiceOrder"}}
+  /shipments/{shipmentId}/events:
+    post:
+      tags: [production]
+      operationId: appendShipmentEvent
+      summary: "Append tracking event (feeds rx.fulfillment_status projection)"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/ShipmentId"]
+      responses: {"201": {description: "ShipmentEvent"}}
+
+  # ======================== finance (P2) ========================
+  /price-lists:
+    get:
+      tags: [finance]
+      operationId: listPriceLists
+      summary: "Lab price lists with customer tiers"
+      x-status: provisional
+      responses: {"200": {description: "PriceLists"}}
+    post:
+      tags: [finance]
+      operationId: createPriceList
+      summary: "Create price list"
+      x-status: provisional
+      responses: {"201": {description: "PriceList"}}
+  /invoices:
+    get:
+      tags: [finance]
+      operationId: listInvoices
+      summary: "List invoices"
+      x-status: provisional
+      responses: {"200": {description: "Invoices"}}
+    post:
+      tags: [finance]
+      operationId: createInvoice
+      summary: "Invoice from order (price snapshot)"
+      x-status: provisional
+      responses: {"201": {description: "Invoice"}}
+  /invoices/{invoiceId}/payments:
+    post:
+      tags: [finance]
+      operationId: recordPayment
+      summary: "Record + allocate payment"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/InvoiceId"]
+      responses: {"201": {description: "Allocation"}}
+  /reports/{kind}:
+    post:
+      tags: [finance]
+      operationId: runReport
+      summary: "Run report export job"
+      x-status: provisional
+      parameters: [$ref: "#/components/parameters/ReportKind"]
+      responses: {"202": {description: "ReportJob"}}
+
+  # ======================== integrations ========================
+  /integrations/connections:
+    get:
+      tags: [integrations]
+      operationId: listIntegrationConnections
+      summary: "List vendor connections"
+      responses: {"200": {description: "Connections"}}
+    post:
+      tags: [integrations]
+      operationId: createIntegrationConnection
+      summary: "Register vendor connection (auth via secret ref)"
+      responses: {"201": {description: "Connection"}}
+  /integrations/scan-events:
+    get:
+      tags: [integrations]
+      operationId: listScanEvents
+      summary: "Inbound scans pending match"
+      responses: {"200": {description: "ScanEvents"}}
+    post:
+      tags: [integrations]
+      operationId: ingestScanEvent
+      summary: "Adapter ingest (webhook or poller)"
+      responses: {"202": {description: "Accepted"}}
+  /webhooks:
+    get:
+      tags: [integrations]
+      operationId: listWebhooks
+      summary: "List webhook subscriptions"
+      responses: {"200": {description: "Webhooks"}}
+    post:
+      tags: [integrations]
+      operationId: createWebhook
+      summary: "Subscribe (HMAC secret issued)"
+      responses: {"201": {description: "Webhook"}}
+  /agent/sessions:
+    post:
+      tags: [integrations]
+      operationId: agentSession
+      summary: "Desktop agent check-in + sync manifest"
+      x-status: provisional
+      responses: {"201": {description: "AgentSession"}}
+
+  # ======================== platform ========================
+  /audit-events:
+    get:
+      tags: [platform]
+      operationId: listAuditEvents
+      summary: "Audit query (admin, org-scoped)"
+      x-scope: org_admin
+      parameters:
+        - {name: object_type, in: query, schema: {type: string}}
+        - {name: object_id, in: query, schema: {type: string}}
+        - {name: since, in: query, schema: {type: string, format: date-time}}
+      responses:
+        "200":
+          description: "Audit page"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/AuditEvent"}}, next_cursor: {type: [string, "null"]}}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /data-export-requests:
+    post:
+      tags: [platform]
+      operationId: requestDataExport
+      summary: "Request org data export (audited, approved, 2FA)"
+      x-scope: org_admin + verified 2FA
+      x-status: provisional
+      responses:
+        "202": {description: "ExportRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /healthz:
+    get:
+      tags: [platform]
+      operationId: healthz
+      summary: "Liveness"
+      security: []
+      responses: {"200": {description: "OK"}}
+
+components:
+  parameters:
+    OrgId: {name: orgId, in: path, required: true, schema: {type: string, format: uuid}}
+    ConnectionId: {name: connectionId, in: path, required: true, schema: {type: string, format: uuid}}
+    PatientId: {name: patientId, in: path, required: true, schema: {type: string, format: uuid}}
+    RxId: {name: rxId, in: path, required: true, schema: {type: string, format: uuid}}
+    NotificationId: {name: notificationId, in: path, required: true, schema: {type: string, format: uuid}}
+    TemplateId: {name: templateId, in: path, required: true, schema: {type: string, format: uuid}}
+    SessionId: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
+    AssetId: {name: assetId, in: path, required: true, schema: {type: string, format: uuid}}
+    JobId: {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+    OrderId: {name: orderId, in: path, required: true, schema: {type: string, format: uuid}}
+    ShipmentId: {name: shipmentId, in: path, required: true, schema: {type: string, format: uuid}}
+    InvoiceId: {name: invoiceId, in: path, required: true, schema: {type: string, format: uuid}}
+    ReportKind:
+      name: kind
+      in: path
+      required: true
+      schema: {type: string, enum: [sales, aging, orders, kpi]}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: "Client-generated key; same key + same payload = replay; same key + different payload = 409"
+      schema: {type: string, minLength: 8, maxLength: 128}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: "Entity version for optimistic locking; mismatch = 409 VersionConflict"
+      schema: {type: integer, minimum: 0}
+  responses:
+    Unauthorized:
+      description: "Missing or invalid credentials"
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    Forbidden:
+      description: "Denied — same shape whether object exists or not (no oracle)"
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    NotFound:
+      description: "Not found within authorized scope"
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    Conflict:
+      description: "State or uniqueness conflict"
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    VersionConflict:
+      description: "If-Match/expected_version mismatch — resource changed"
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    ValidationFailed:
+      description: "Field-level validation errors"
+      content: {application/json: {schema: {$ref: "#/components/schemas/ValidationError"}}}
+    IllegalTransition:
+      description: "Transition not allowed from current status (see state-machines.md)"
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes:
+            rx:read: "read prescriptions"
+            rx:write: "create or update prescriptions"
+            assets:write: "upload files"
+            webhook:manage: "manage webhook endpoints"
+  schemas:
+    # ---------- shared ----------
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, description: "machine code, e.g. forbidden|version_conflict|illegal_transition|no_accepted_connection|idempotency_payload_mismatch|version_drift"}
+        message: {type: string}
+        trace_id: {type: string}
+    ValidationError:
+      type: object
+      required: [code, message, fields]
+      properties:
+        code: {const: validation_failed}
+        message: {type: string}
+        fields:
+          type: array
+          items:
+            type: object
+            required: [path, code]
+            properties:
+              path: {type: string}
+              code: {type: string}
+              message: {type: string}
+    DuplicateCandidate:
+      type: object
+      required: [code, message, candidates]
+      properties:
+        code: {const: possible_duplicate}
+        message: {type: string}
+        candidates: {type: array, items: {type: object, properties: {patient_id: {type: string, format: uuid}, last_name: {type: string}, dob: {type: string, format: date}}}}
+    AsyncJob:
+      type: object
+      required: [job_id, status]
+      properties:
+        job_id: {type: string, format: uuid}
+        status: {type: string, enum: [queued, running, done, failed]}
+        result_url: {type: [string, "null"], format: uri}
+
+    # ---------- IAM ----------
+    Org:
+      type: object
+      required: [id, kind, name]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [practice, lab, hybrid]}
+        name: {type: string, minLength: 1, maxLength: 200}
+        status: {type: string, enum: [active, suspended], readOnly: true}
+        timezone: {type: string, description: "IANA tz"}
+        created_at: {type: string, format: date-time, readOnly: true}
+    OrgCreate:
+      type: object
+      required: [kind, name]
+      properties:
+        kind: {type: string, enum: [practice, lab, hybrid]}
+        name: {type: string, minLength: 1, maxLength: 200}
+        timezone: {type: string}
+    Location:
+      type: object
+      required: [id, org_id, name]
+      properties:
+        id: {type: string, format: uuid}
+        org_id: {type: string, format: uuid}
+        name: {type: string}
+        address: {type: string}
+        phone: {type: string}
+    LocationCreate:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1}
+        address: {type: string}
+        phone: {type: string}
+    Membership:
+      type: object
+      required: [id, org_id, user_id, role, status]
+      properties:
+        id: {type: string, format: uuid}
+        org_id: {type: string, format: uuid}
+        user_id: {type: string, format: uuid}
+        role: {type: string, enum: [practice_admin, practice_doctor, practice_staff, lab_admin, lab_technician]}
+        status: {type: string, enum: [invited, active, disabled]}
+    MemberInvite:
+      type: object
+      required: [email, role]
+      properties:
+        email: {type: string, format: email}
+        role: {type: string, enum: [practice_admin, practice_doctor, practice_staff, lab_admin, lab_technician]}
+    RosterMember:
+      type: object
+      required: [id, org_id, kind, display_name]
+      properties:
+        id: {type: string, format: uuid}
+        org_id: {type: string, format: uuid}
+        kind: {type: string, enum: [doctor, staff]}
+        display_name: {type: string}
+        credentials: {type: string, description: "license/title text"}
+        is_default: {type: boolean, default: false}
+        linked_user_id: {type: [string, "null"], format: uuid}
+        status: {type: string, enum: [active, disabled], readOnly: true}
+    RosterMemberCreate:
+      type: object
+      required: [kind, display_name]
+      properties:
+        kind: {type: string, enum: [doctor, staff]}
+        display_name: {type: string, minLength: 1}
+        credentials: {type: string}
+        is_default: {type: boolean, default: false}
+        linked_user_id: {type: [string, "null"], format: uuid}
+    OrgConnection:
+      type: object
+      required: [id, practice_org_id, lab_org_id, status, initiated_by_org_id, version]
+      properties:
+        id: {type: string, format: uuid}
+        practice_org_id: {type: string, format: uuid}
+        lab_org_id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, accepted, rejected, withdrawn, revoked]}
+        initiated_by_org_id: {type: string, format: uuid, readOnly: true}
+        decided_by_user_id: {type: [string, "null"], format: uuid, readOnly: true}
+        decided_at: {type: [string, "null"], format: date-time, readOnly: true}
+        granted_scopes: {type: array, items: {type: string}}
+        version: {type: integer, readOnly: true}
+    OrgConnectionRequest:
+      type: object
+      required: [practice_org_id, lab_org_id]
+      properties:
+        practice_org_id: {type: string, format: uuid}
+        lab_org_id: {type: string, format: uuid}
+        granted_scopes: {type: array, items: {type: string}}
+
+    # ---------- Patients ----------
+    Patient:
+      type: object
+      required: [id, org_id, patient_number, first_name, last_name, version]
+      properties:
+        id: {type: string, format: uuid}
+        org_id: {type: string, format: uuid}
+        patient_number: {type: string, readOnly: true, description: "org-scoped human number, e.g. P000123"}
+        first_name: {type: string}
+        last_name: {type: string}
+        dob: {type: [string, "null"], format: date}
+        external_ref: {type: [string, "null"]}
+        notes: {type: [string, "null"]}
+        version: {type: integer, readOnly: true}
+        deleted_at: {type: [string, "null"], format: date-time, readOnly: true}
+        created_at: {type: string, format: date-time, readOnly: true}
+    PatientCreate:
+      type: object
+      required: [first_name, last_name]
+      properties:
+        first_name: {type: string, minLength: 1, maxLength: 100}
+        last_name: {type: string, minLength: 1, maxLength: 100}
+        dob: {type: [string, "null"], format: date}
+        external_ref: {type: [string, "null"], maxLength: 128}
+        notes: {type: [string, "null"]}
+        confirm_duplicate: {type: boolean, default: false, description: "explicit confirmation required after a 409 possible_duplicate"}
+    PatientUpdate:
+      type: object
+      properties:
+        first_name: {type: string, minLength: 1, maxLength: 100}
+        last_name: {type: string, minLength: 1, maxLength: 100}
+        dob: {type: [string, "null"], format: date}
+        external_ref: {type: [string, "null"], maxLength: 128}
+        notes: {type: [string, "null"]}
+    TreatmentCase:
+      type: object
+      required: [id, patient_id, stage]
+      properties:
+        id: {type: string, format: uuid}
+        patient_id: {type: string, format: uuid}
+        label: {type: [string, "null"]}
+        stage: {type: string, enum: [active, completed, cancelled], description: "PROVISIONAL set"}
+        opened_at: {type: string, format: date-time, readOnly: true}
+        closed_at: {type: [string, "null"], format: date-time}
+    CaseCreate:
+      type: object
+      properties:
+        label: {type: [string, "null"]}
+
+    # ---------- Rx ----------
+    Rx:
+      type: object
+      required: [id, rx_number, status, version, practice_org_id]
+      properties:
+        id: {type: string, format: uuid}
+        rx_number: {type: string, readOnly: true}
+        patient_id: {type: string, format: uuid}
+        case_id: {type: [string, "null"], format: uuid}
+        status:
+          type: string
+          description: "Clinical lifecycle only — single writer: rx module"
+          enum: [draft, submitted, checked_in, in_progress, on_hold, completed, reopened, cancelled]
+        fulfillment_status:
+          type: string
+          description: "Projection driven by shipment.* events — never API-writable"
+          enum: [none, dispatched, in_transit, received, delivered, exception]
+          readOnly: true
+        form_type: {type: string, enum: [standard, aligner, idb]}
+        form_payload: {type: object, description: "form-type specific answers; schema per form_type (V1.1 to define)"}
+        due_date: {type: [string, "null"], format: date}
+        notes: {type: [string, "null"]}
+        practice_org_id: {type: string, format: uuid}
+        lab_org_id: {type: [string, "null"], format: uuid}
+        location_id: {type: [string, "null"], format: uuid}
+        doctor_id: {type: [string, "null"], format: uuid}
+        checked_in_via: {type: [string, "null"], enum: [button, download], readOnly: true, description: "which check-in path fired (SRC03: download IS a check-in)"}
+        signature_name: {type: [string, "null"], description: "typed e-signature captured at submit"}
+        signed_rx_version: {type: [integer, "null"], readOnly: true, description: "exact Rx version the signature binds (persisted at submit)"}
+        items: {type: array, items: {$ref: "#/components/schemas/RxItem"}, readOnly: true, description: "present on getRx/create/submit responses"}
+        version: {type: integer, readOnly: true}
+        submitted_at: {type: [string, "null"], format: date-time, readOnly: true}
+        checked_in_at: {type: [string, "null"], format: date-time, readOnly: true}
+        completed_at: {type: [string, "null"], format: date-time, readOnly: true}
+        created_at: {type: string, format: date-time, readOnly: true}
+    RxCreate:
+      type: object
+      required: [patient_id]
+      properties:
+        patient_id: {type: string, format: uuid}
+        case_id: {type: [string, "null"], format: uuid, description: "omit → default case"}
+        lab_org_id: {type: [string, "null"], format: uuid, description: "must have accepted connection at submit time"}
+        location_id: {type: [string, "null"], format: uuid}
+        doctor_id: {type: [string, "null"], format: uuid, description: "roster member; required per roster-required flag"}
+        form_type: {type: string, enum: [standard, aligner, idb], default: standard}
+        due_date: {type: [string, "null"], format: date}
+        notes: {type: [string, "null"]}
+        template_id: {type: [string, "null"], format: uuid, description: "prefill items/annotations from template"}
+    RxUpdate:
+      type: object
+      description: "Draft-only fields; all optional; server bumps version"
+      properties:
+        lab_org_id: {type: [string, "null"], format: uuid}
+        location_id: {type: [string, "null"], format: uuid}
+        doctor_id: {type: [string, "null"], format: uuid}
+        due_date: {type: [string, "null"], format: date}
+        form_payload: {type: object}
+        notes: {type: [string, "null"]}
+    RxSubmit:
+      type: object
+      description: "Signature gate (S1b1-03): signature_name + confirm_submit are server-enforced; the server stamps signer user/org/UTC/rx-version"
+      required: [signature_name, confirm_submit]
+      properties:
+        note: {type: [string, "null"], description: "submission note to lab"}
+        signature_name: {type: string, minLength: 1, description: "typed e-signature name — whitespace-only rejected"}
+        confirm_submit: {type: boolean, description: "explicit confirmation — must be true"}
+    RxItem:
+      type: object
+      required: [id, appliance_id, arch]
+      properties:
+        id: {type: string, format: uuid}
+        appliance_id: {type: string, format: uuid}
+        arch: {type: string, enum: [upper, lower, both]}
+        tooth_ops:
+          type: array
+          description: "FDI-numbered tooth operations"
+          items:
+            type: object
+            required: [tooth, op]
+            properties:
+              tooth: {type: string, pattern: "^[1-4][1-8]$", description: "FDI notation"}
+              op: {type: string, enum: [extraction, ipr, reset]}
+              detail: {type: [string, "null"]}
+        options: {type: object, description: "per-part configured options"}
+        qty: {type: integer, minimum: 1, default: 1}
+    RxItemsReplace:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [appliance_id, arch]
+            properties:
+              appliance_id: {type: string, format: uuid}
+              arch: {type: string, enum: [upper, lower, both]}
+              tooth_ops:
+                type: array
+                items:
+                  type: object
+                  required: [tooth, op]
+                  properties:
+                    tooth: {type: string, pattern: "^[1-4][1-8]$"}
+                    op: {type: string, enum: [extraction, ipr, reset]}
+                    detail: {type: [string, "null"]}
+              options: {type: object}
+              qty: {type: integer, minimum: 1, default: 1}
+    RxTransition:
+      type: object
+      required: [target, expected_version]
+      properties:
+        target:
+          type: string
+          enum: [in_progress, on_hold, resume, complete, cancel, reopen]
+          description: "see state-machines.md §1; unknown transitions rejected"
+        expected_version: {type: integer, minimum: 0}
+        reason: {type: [string, "null"], description: "required for cancel|reopen|on_hold"}
+    RxBundle:
+      type: object
+      required: [id, rx_id, rx_version, sha256, bytes, status, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        rx_id: {type: string, format: uuid}
+        rx_version: {type: integer, description: "rx version the package was built from"}
+        sha256: {type: string, description: "SHA-256 of the ZIP"}
+        bytes: {type: integer}
+        status: {type: string, enum: [ready, failed]}
+        created_at: {type: string, format: date-time}
+    RxPdf:
+      type: object
+      required: [id, rx_id, version, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        rx_id: {type: string, format: uuid}
+        version: {type: integer}
+        file_asset_id: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+    CatalogPart:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        category: {type: string}
+    CatalogAppliance:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        part_ids: {type: array, items: {type: string, format: uuid}}
+    RxTemplate:
+      type: object
+      required: [id, owner_org_id, name]
+      properties:
+        id: {type: string, format: uuid}
+        owner_org_id: {type: string, format: uuid}
+        name: {type: string}
+        payload: {type: object}
+        visibility: {type: string, enum: [private, shared]}
+    TemplateCreate:
+      type: object
+      required: [name, payload]
+      properties:
+        name: {type: string, minLength: 1}
+        payload: {type: object}
+        visibility: {type: string, enum: [private, shared], default: private}
+
+    # ---------- Collaboration ----------
+    Comment:
+      type: object
+      required: [id, rx_id, author_membership_id, body, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        rx_id: {type: string, format: uuid}
+        author_membership_id: {type: string, format: uuid}
+        parent_id: {type: [string, "null"], format: uuid}
+        body: {type: string}
+        created_at: {type: string, format: date-time}
+        edited_at: {type: [string, "null"], format: date-time}
+    CommentCreate:
+      type: object
+      required: [body]
+      properties:
+        body: {type: string, minLength: 1, maxLength: 4000}
+        parent_id: {type: [string, "null"], format: uuid}
+    Notification:
+      type: object
+      required: [id, rx_id, kind, subject, status]
+      properties:
+        id: {type: string, format: uuid}
+        rx_id: {type: string, format: uuid}
+        kind: {type: string, enum: [info, ack_required, approval_required, email_only]}
+        subject: {type: string}
+        body: {type: string}
+        file_reference_id: {type: [string, "null"], format: uuid, description: "attachment-bound question (COM-006)"}
+        status: {type: string, enum: [unread, read, acked, resolved], readOnly: true}
+        created_at: {type: string, format: date-time, readOnly: true}
+    NotificationCreate:
+      type: object
+      required: [rx_id, kind, subject]
+      properties:
+        rx_id: {type: string, format: uuid}
+        kind: {type: string, enum: [info, ack_required, approval_required, email_only]}
+        subject: {type: string, minLength: 1, maxLength: 300}
+        body: {type: [string, "null"], maxLength: 8000}
+        file_reference_id: {type: [string, "null"], format: uuid}
+        recipient_role: {type: [string, "null"], description: "e.g. prescribing doctor"}
+    DecisionRequest:
+      type: object
+      required: [decision, expected_rx_version]
+      properties:
+        decision: {type: string, enum: [approved, rejected, changes_requested]}
+        expected_rx_version: {type: integer, minimum: 0, description: "decision binds this rx version; drift = 409"}
+        signature: {type: [string, "null"], description: "typed name / drawn sig ref; e-signature record built server-side"}
+        comment: {type: [string, "null"]}
+    Approval:
+      type: object
+      required: [id, notification_id, decision, signer_user_id, rx_version, decided_at]
+      properties:
+        id: {type: string, format: uuid}
+        notification_id: {type: string, format: uuid}
+        decision: {type: string, enum: [approved, rejected, changes_requested]}
+        signer_user_id: {type: string, format: uuid}
+        rx_version: {type: integer}
+        decided_at: {type: string, format: date-time}
+
+    # ---------- Assets ----------
+    UploadDeclare:
+      type: object
+      required: [sha256, bytes, kind]
+      properties:
+        sha256: {type: string, pattern: "^[0-9a-f]{64}$", description: "content hash — dedup + integrity"}
+        bytes: {type: integer, minimum: 1}
+        kind: {type: string, enum: [stl, pdf, image, other]}
+        jaw: {type: string, enum: [upper, lower, na], default: na}
+        filename_hint: {type: [string, "null"], description: "display only; stored anonymized"}
+    UploadSession:
+      type: object
+      required: [id, status, expires_at]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [open, completed, expired]}
+        upload_urls: {type: array, items: {type: string, format: uri}, description: "presigned part URLs"}
+        expires_at: {type: string, format: date-time}
+        resumed: {type: boolean, description: "true when dedup/resume returned an existing session"}
+    UploadComplete:
+      type: object
+      required: [sha256]
+      properties:
+        sha256: {type: string, pattern: "^[0-9a-f]{64}$", description: "must equal declared hash — server re-verifies"}
+    Asset:
+      type: object
+      required: [id, sha256, kind, format_status, bytes]
+      properties:
+        id: {type: string, format: uuid}
+        sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
+        kind: {type: string, enum: [stl, pdf, image, other]}
+        jaw: {type: string, enum: [upper, lower, na]}
+        parent_asset_id: {type: [string, "null"], format: uuid, description: "version chain; originals have null and are immutable"}
+        format_status: {type: string, enum: [unverified, format_ok, format_rejected], readOnly: true, description: "structural recognition only — format_ok is NOT a security/quality scan; only format_ok may be referenced"}
+        bytes: {type: integer}
+        created_at: {type: string, format: date-time, readOnly: true}
+    FileReference:
+      type: object
+      required: [id, asset_id, subject_type, subject_id, role]
+      properties:
+        id: {type: string, format: uuid}
+        asset_id: {type: string, format: uuid}
+        subject_type: {type: string, enum: [patient, case, rx, notification, order]}
+        subject_id: {type: string, format: uuid}
+        role: {type: string, enum: [original, optimized, processed, print_ready, attachment]}
+        revoked_at: {type: [string, "null"], format: date-time, readOnly: true}
+    AttachmentCreate:
+      type: object
+      required: [asset_id, role]
+      properties:
+        asset_id: {type: string, format: uuid, description: "must be format_status=format_ok"}
+        role: {type: string, enum: [original, attachment]}
+    ReferenceCreate:
+      type: object
+      required: [subject_type, subject_id, role]
+      properties:
+        subject_type: {type: string, enum: [patient, case, rx, notification, order]}
+        subject_id: {type: string, format: uuid}
+        role: {type: string, enum: [original, optimized, processed, print_ready, attachment]}
+    DownloadRequest:
+      type: object
+      properties:
+        ttl_seconds: {type: integer, minimum: 60, maximum: 86400, default: 900}
+    SignedUrl:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url: {type: string, format: uri}
+        expires_at: {type: string, format: date-time}
+        grant_id: {type: string, format: uuid}
+
+    # ---------- Processing / Production (schema-light until P1) ----------
+    ProcessingJob:
+      type: object
+      required: [id, status, recipe_id, recipe_version]
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          type: string
+          description: "Processing only — print lifecycle lives on print_queue_item"
+          enum: [pending, processing, qc_pending, approved, rejected, failed, cancelled, released]
+        recipe_id: {type: string, format: uuid}
+        recipe_version: {type: integer}
+        engine: {type: string}
+        engine_version: {type: string}
+        input_sha256: {type: string}
+        params_snapshot: {type: object}
+
+    # ---------- Platform ----------
+    AuditEvent:
+      type: object
+      required: [id, action, object_type, object_id, ts]
+      properties:
+        id: {type: string, format: uuid}
+        actor_user_id: {type: [string, "null"], format: uuid}
+        org_id: {type: string, format: uuid}
+        action: {type: string}
+        object_type: {type: string}
+        object_id: {type: string}
+        before_hash: {type: [string, "null"]}
+        after_hash: {type: [string, "null"]}
+        ts: {type: string, format: date-time}
+security:
+  - bearerAuth: []
+  - oauth2: []

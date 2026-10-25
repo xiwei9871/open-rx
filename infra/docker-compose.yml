@@ -1,0 +1,102 @@
+name: easyrs-dev
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: easyrs_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-dev_admin_pw_change_me}
+      POSTGRES_DB: easyrs
+      # init script reads this inside the container — must match the password
+      # api/migrate use, or CI overrides create an easyrs_app credential split.
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-dev_app_pw_change_me}
+    # 55432 (not 5432): dev machines may run a local Postgres/ssh tunnel on 5432
+    # 55432 (not 5432): dev machines may run a local Postgres/ssh tunnel on 5432.
+    # All dev services bind loopback only — never expose to LAN/public.
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easyrs_admin -d easyrs"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible object store. MinIO images are unavailable on reachable
+  # registries in this environment; RustFS provides the same S3 API surface
+  # (boto3-compatible, used for bucket provisioning only at B0).
+  minio:
+    # Pinned by digest (B0.1 — no floating tags). S3 API surface verified by
+    # tests/test_s3_compat.py; see stage-b01 report for the tested scope.
+    image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+    command: rustfs /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER:-easyrs_dev}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_minio_pw_change_me}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - miniodata:/data
+
+  # One-shot schema/seed job — the ONLY component holding admin credentials.
+  # SEED_SYNTHETIC defaults true for dev; prod-style runs set it false.
+  migrate:
+    build:
+      context: ../apps/api
+    environment:
+      ENV: dev
+      DATABASE_URL: postgresql+asyncpg://easyrs_app:${POSTGRES_APP_PASSWORD:-dev_app_pw_change_me}@postgres:5432/easyrs
+      DATABASE_ADMIN_URL: postgresql+asyncpg://easyrs_admin:${POSTGRES_ADMIN_PASSWORD:-dev_admin_pw_change_me}@postgres:5432/easyrs
+      SEED_SYNTHETIC: ${SEED_SYNTHETIC:-true}
+    command: >
+      sh -c "alembic upgrade head &&
+             if [ \"$$SEED_SYNTHETIC\" = \"true\" ]; then python -m app.seed; fi &&
+             echo migrate_done"
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  api:
+    build:
+      context: ../apps/api
+    environment:
+      ENV: dev
+      DATABASE_URL: postgresql+asyncpg://easyrs_app:${POSTGRES_APP_PASSWORD:-dev_app_pw_change_me}@postgres:5432/easyrs
+      DATABASE_ADMIN_URL: ""     # runtime never holds the RLS-exempt role
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      # presigned URLs are dialed by the browser — must be the published host
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-easyrs_dev}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_minio_pw_change_me}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      minio: {condition: service_started}
+
+  web:
+    build:
+      context: ../apps/web
+    ports:
+      - "127.0.0.1:5173:80"   # nginx serves the built SPA on :80 inside
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  miniodata:

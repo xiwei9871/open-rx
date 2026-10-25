@@ -1,0 +1,83 @@
+feature_id,flag,note
+IAM-009,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+IAM-010,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FLOW-003,NEEDS_VERIFICATION,仅用户截图证据，未实测，不可公开引用细节
+FLOW-004,NEEDS_VERIFICATION,仅用户截图证据，未实测，不可公开引用细节
+FLOW-014,NEEDS_VERIFICATION,仅用户截图证据，未实测，不可公开引用细节
+COM-011,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-003,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-008,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-009,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-014,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-015,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-017,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+LAB-018,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-004,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-005,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-006,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-008,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-009,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-011,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-012,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-013,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+FIN-014,NEEDS_VERIFICATION,仅用户截图证据，未实测，不可公开引用细节
+INT-002,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+INT-003,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+INT-007,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+INT-008,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+INT-009,NEEDS_VERIFICATION,仅官方目录/提纲级证据，正文细节未核验
+IAM-011,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+IAM-012,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+PAT-008,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+PAT-009,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+FLOW-016,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+ASSET-008,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+ASSET-009,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+ASSET-010,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+EDIT-014,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+AI-017,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+LAB-020,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+INT-011,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-001,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-002,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-003,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-004,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-005,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-006,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-007,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-008,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-009,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+SAFE-010,PROPOSED,新系统自建能力，非 EasyRx 已确认功能
+ASSET-007,OVERLAP,EasyFS 类本地文件访问在 ASSET 与 INT 两模块重复登记，需合并为桌面代理适配器需求
+INT-010,OVERLAP,EasyFS 类本地文件访问在 ASSET 与 INT 两模块重复登记，需合并为桌面代理适配器需求
+ASSET-002,OVERLAP,原始/优化版本区分(D1观察)与文件版本链+不可变原件(T设计)需统一验收口径
+ASSET-009,OVERLAP,原始/优化版本区分(D1观察)与文件版本链+不可变原件(T设计)需统一验收口径
+FLOW-012,OVERLAP,Rx 端 Shipped 状态与实验室物流签收边界需明确，不能双写状态
+LAB-019,OVERLAP,Rx 端 Shipped 状态与实验室物流签收边界需明确，不能双写状态
+FLOW-011,OVERLAP,Rx Complete 与生产完成者追踪的状态映射未验证(GAP-15)
+LAB-015,OVERLAP,Rx Complete 与生产完成者追踪的状态映射未验证(GAP-15)
+EDIT-013,OVERLAP,人工去托槽与 AI 去托槽共享牙面质量验收标准，但为两条独立实现路径
+AI-006,OVERLAP,人工去托槽与 AI 去托槽共享牙面质量验收标准，但为两条独立实现路径
+RX-019,OVERLAP,处方附件上传与 STL 上下颌分类上传是同一管线的两个入口，需统一实现
+ASSET-001,OVERLAP,处方附件上传与 STL 上下颌分类上传是同一管线的两个入口，需统一实现
+IAM-008,OVERLAP,实验室向医生分享模板的授权边与模板复制/查看/编辑权限需合并建模
+RX-012,OVERLAP,实验室向医生分享模板的授权边与模板复制/查看/编辑权限需合并建模
+COM-006,OVERLAP,附件级问题通知与实验室审核问题工作流需共用同一通知对象
+LAB-002,OVERLAP,附件级问题通知与实验室审核问题工作流需共用同一通知对象
+COM-005,OVERLAP,仅 Email 通知与通知偏好设置存在配置冲突场景
+COM-008,OVERLAP,仅 Email 通知与通知偏好设置存在配置冲突场景
+FLOW-007,OVERLAP,下载 ZIP 自动 Check-in 属旧行为，新系统需显式区分下载与正式接单
+FLOW-006,OVERLAP,下载 ZIP 自动 Check-in 属旧行为，新系统需显式区分下载与正式接单
+INT-005,OVERLAP,通用扫描仪 STL 导入与手动上传应复用同一资产管线
+ASSET-001,OVERLAP,通用扫描仪 STL 导入与手动上传应复用同一资产管线
+SAFE-005,OVERLAP,恶意文件扫描/上传限制与防病毒隔离配额重复登记
+ASSET-010,OVERLAP,恶意文件扫描/上传限制与防病毒隔离配额重复登记
+IAM-012,OVERLAP,双因素访问审计与全局审计日志需统一审计事件模型
+SAFE-001,OVERLAP,双因素访问审计与全局审计日志需统一审计事件模型
+FIN-013,OVERLAP,销售/账龄报表与业务绩效统计指标口径需定义边界
+FIN-014,OVERLAP,销售/账龄报表与业务绩效统计指标口径需定义边界
+RX-003,NEEDS_VERIFICATION,处方唯一编号规则/格式未公开，需确认是否含机构前缀与重提保持
+IAM-003,NEEDS_VERIFICATION,医生离职/禁用后历史处方与签署归属未验证
+AI-015,NEEDS_VERIFICATION,Recipe/Profile 持久化部分依赖截图证据，参数集合需按 SRC04 逐项核对
+FLOW-017,NEEDS_VERIFICATION,取消/重开/重做子流程仅有部分截图证据，状态回退规则未确认
+LAB-016,NEEDS_VERIFICATION,自动最低交付日计算规则跨 LAB 与 FLOW-015 重复表述，算法未公开

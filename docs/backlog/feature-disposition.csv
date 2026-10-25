@@ -1,0 +1,168 @@
+feature_id,phase,primary_disposition,labels,detail
+AI-001,P1,NOT_IN_MVP,,
+AI-002,P1,NOT_IN_MVP,,
+AI-003,P2,NOT_IN_MVP,,
+AI-004,P1,NOT_IN_MVP,,
+AI-005,P2,NOT_IN_MVP,,
+AI-006,P3,NOT_IN_MVP,,
+AI-007,P3,NOT_IN_MVP,,
+AI-008,P2,NOT_IN_MVP,,
+AI-009,P2,NOT_IN_MVP,,
+AI-010,P2,NOT_IN_MVP,,
+AI-011,P2,NOT_IN_MVP,,
+AI-012,P2,NOT_IN_MVP,,
+AI-013,P3,NOT_IN_MVP,,
+AI-014,P3,NOT_IN_MVP,,
+AI-015,P1,NOT_IN_MVP,,
+AI-016,P1,NOT_IN_MVP,,
+AI-017,P1,NOT_IN_MVP,,
+ASSET-001,MVP,CORE,,STL upload + jaw
+ASSET-002,MVP,CORE,,original/optimized distinction — version chain
+ASSET-003,MVP,SIMPLIFY,target:P1,basic Three.js preview; large-mesh LOD -> P1
+ASSET-004,P1,NOT_IN_MVP,,
+ASSET-005,MVP,CORE,,cross-context file access via references
+ASSET-006,P1,NOT_IN_MVP,,
+ASSET-007,P2,NOT_IN_MVP,,
+ASSET-008,MVP,CORE,security-critical,hash dedup (was KEEP-SEC)
+ASSET-009,MVP,CORE,security-critical,immutable version chain (was KEEP-SEC)
+ASSET-010,MVP,SIMPLIFY,security-critical,type/size/mesh sanity mandatory; AV engine pluggable
+COM-001,MVP,CORE,,comments
+COM-002,MVP,CORE,,clinical notifications
+COM-003,P1,NOT_IN_MVP,,
+COM-004,MVP,CORE,,approval-required notification — E2E-09
+COM-005,P2,NOT_IN_MVP,,
+COM-006,P1,NOT_IN_MVP,,
+COM-007,MVP,CORE,,message center
+COM-008,P1,NOT_IN_MVP,,
+COM-009,P1,NOT_IN_MVP,,
+COM-010,P2,NOT_IN_MVP,,
+COM-011,P2,NOT_IN_MVP,,
+COM-012,P2,NOT_IN_MVP,,
+EDIT-001,P1,NOT_IN_MVP,,
+EDIT-002,P1,NOT_IN_MVP,,
+EDIT-003,P1,NOT_IN_MVP,,
+EDIT-004,P1,NOT_IN_MVP,,
+EDIT-005,P1,NOT_IN_MVP,,
+EDIT-006,P1,NOT_IN_MVP,,
+EDIT-007,P1,NOT_IN_MVP,,
+EDIT-008,P1,NOT_IN_MVP,,
+EDIT-009,P1,NOT_IN_MVP,,
+EDIT-010,P2,NOT_IN_MVP,,
+EDIT-011,P1,NOT_IN_MVP,,
+EDIT-012,P2,NOT_IN_MVP,,
+EDIT-013,P2,NOT_IN_MVP,,
+EDIT-014,P1,NOT_IN_MVP,,
+FIN-001,P2,NOT_IN_MVP,,
+FIN-002,P2,NOT_IN_MVP,,
+FIN-003,P2,NOT_IN_MVP,,
+FIN-004,P2,NOT_IN_MVP,,
+FIN-005,P2,NOT_IN_MVP,,
+FIN-006,P2,NOT_IN_MVP,,
+FIN-007,P2,NOT_IN_MVP,,
+FIN-008,P2,NOT_IN_MVP,,
+FIN-009,P2,NOT_IN_MVP,,
+FIN-010,P2,NOT_IN_MVP,,
+FIN-011,P2,NOT_IN_MVP,,
+FIN-012,P3,NOT_IN_MVP,,
+FIN-013,P2,NOT_IN_MVP,,
+FIN-014,P2,NOT_IN_MVP,,
+FLOW-001,MVP,CORE,,dashboard + counts
+FLOW-002,MVP,CORE,,date/status filters
+FLOW-003,MVP,SIMPLIFY,,filter subset (status/date/lab); full multi-dim -> P1
+FLOW-004,P1,NOT_IN_MVP,,
+FLOW-005,MVP,CORE,,saved/submitted lists
+FLOW-006,MVP,CORE,,check-in
+FLOW-007,P1,NOT_IN_MVP,,
+FLOW-008,MVP,CORE,,unsubmit blocked after check-in — SRC24
+FLOW-009,MVP,CORE,,unsubmit returns to saved — E2E-05
+FLOW-010,MVP,CORE,,post-submit manual attach — SRC24
+FLOW-011,MVP,CORE,,complete
+FLOW-012,MVP,MANUAL,,carrier/tracking no. entered by hand; no carrier API
+FLOW-013,MVP,CORE,,receive/deliver — E2E-10
+FLOW-014,MVP,SIMPLIFY,target:P1,fixed due-soon threshold; configurable -> P1
+FLOW-015,P1,NOT_IN_MVP,,
+FLOW-016,MVP,CORE,security-critical,version/approval event log (was KEEP-SEC)
+FLOW-017,P1,NOT_IN_MVP,,
+IAM-001,MVP,CORE,,org profile — foundation
+IAM-002,MVP,CORE,,multi-location; ship-to depends on it
+IAM-003,MVP,CORE,,doctor list + default — Rx required attribution
+IAM-004,MVP,CORE,,staff roster — submitter attribution
+IAM-005,MVP,DEFER,target:P1,staff-required toggles; MVP hard-codes doctor-required
+IAM-006,MVP,CORE,,staff login
+IAM-007,MVP,CORE,,practice-lab connection — E2E-04 path
+IAM-008,MVP,DEFER,target:P1,lab template sharing; MVP = practice-built templates only
+IAM-009,MVP,CORE,security-critical,password management
+IAM-010,MVP,SIMPLIFY,,org-level timezone only; per-user switching deferred
+IAM-011,MVP,CORE,security-critical,least-privilege matrix (was KEEP-SEC)
+IAM-012,MVP,CORE,security-critical,2FA + access audit (was KEEP-SEC)
+INT-001,P2,NOT_IN_MVP,,
+INT-002,P2,NOT_IN_MVP,,
+INT-003,P2,NOT_IN_MVP,,
+INT-004,P2,NOT_IN_MVP,,
+INT-005,MVP,CORE,,generic scanner import via asset pipeline — the ONLY MVP integration
+INT-006,P3,NOT_IN_MVP,,
+INT-007,P3,NOT_IN_MVP,,
+INT-008,P2,NOT_IN_MVP,,
+INT-009,P3,NOT_IN_MVP,,
+INT-010,P2,NOT_IN_MVP,,
+INT-011,MVP,SIMPLIFY,target:P1,internal v1 API contract exists; public webhook subscribe -> P1
+LAB-001,MVP,CORE,,check-in / accept
+LAB-002,MVP,CORE,,issue review via approval loop
+LAB-003,P1,NOT_IN_MVP,,
+LAB-004,P1,NOT_IN_MVP,,
+LAB-005,P1,NOT_IN_MVP,,
+LAB-006,P1,NOT_IN_MVP,,
+LAB-007,P1,NOT_IN_MVP,,
+LAB-008,P1,NOT_IN_MVP,,
+LAB-009,P2,NOT_IN_MVP,,
+LAB-010,P1,NOT_IN_MVP,,
+LAB-011,P1,NOT_IN_MVP,,
+LAB-012,P1,NOT_IN_MVP,,
+LAB-013,P2,NOT_IN_MVP,,
+LAB-014,P1,NOT_IN_MVP,,
+LAB-015,P1,NOT_IN_MVP,,
+LAB-016,P1,NOT_IN_MVP,,
+LAB-017,P1,NOT_IN_MVP,,
+LAB-018,P1,NOT_IN_MVP,,
+LAB-019,MVP,MANUAL,,manual receive/dispatch registration; no carrier API
+LAB-020,P2,NOT_IN_MVP,,
+PAT-001,MVP,CORE,,patient registration
+PAT-002,MVP,CORE,,search-as-you-type / duplicate hint
+PAT-003,MVP,CORE,,external_ref — migration key
+PAT-004,MVP,CORE,,dob duplicate-name disambiguation (display only)
+PAT-005,MVP,CORE,,patient rx history
+PAT-006,MVP,SIMPLIFY,,patient-side attachment entry reduced; Rx-side is primary
+PAT-007,P2,NOT_IN_MVP,,
+PAT-008,MVP,CORE,,treatment case entity
+PAT-009,MVP,CORE,security-critical,soft delete + retention (was KEEP-SEC)
+RX-001,MVP,CORE,,create entry
+RX-002,MVP,CORE,,doctor/location/lab/due-date — E2E-01
+RX-003,MVP,CORE,,unique rx number
+RX-004,MVP,CORE,,draft — E2E-02
+RX-005,P2,NOT_IN_MVP,,
+RX-006,MVP,SIMPLIFY,,"curated starter catalog (tens), not 500+ (GAP-04)"
+RX-007,MVP,SIMPLIFY,,appliance library seeded from curated parts only
+RX-008,MVP,SIMPLIFY,target:P1,tooth checkbox/marking instead of drag canvas; canvas -> P1
+RX-009,MVP,CORE,,part options
+RX-010,MVP,CORE,,template save/apply
+RX-011,MVP,DEFER,target:P1,template-source kinds depend on IAM-008 sharing
+RX-012,P1,NOT_IN_MVP,,
+RX-013,MVP,CORE,,free text
+RX-014,P1,NOT_IN_MVP,,
+RX-015,P1,NOT_IN_MVP,,
+RX-016,P1,NOT_IN_MVP,,
+RX-017,P1,NOT_IN_MVP,,
+RX-018,P1,NOT_IN_MVP,,
+RX-019,MVP,CORE,,attachments on rx
+RX-020,MVP,CORE,,checkout/submit — E2E-07 idempotent
+RX-021,MVP,CORE,,rx PDF export — E2E-11
+SAFE-001,MVP,CORE,security-critical,audit + signature attribution
+SAFE-002,MVP,CORE,security-critical,tenant isolation
+SAFE-003,MVP,CORE,security-critical,encryption at rest/in transit
+SAFE-004,MVP,CORE,security-critical,time-boxed download links
+SAFE-005,MVP,CORE,security-critical,upload limits + scan
+SAFE-006,MVP,CORE,security-critical,backup + restore drill — E2E-16
+SAFE-007,P1,NOT_IN_MVP,,
+SAFE-008,MVP,CORE,security-critical,synthetic data only — zero PHI
+SAFE-009,MVP,SIMPLIFY,target:post-MVP-iter1,admin JSON+file export skeleton; full migration tool later (GAP-09)
+SAFE-010,MVP,CORE,security-critical,compliance deploy baseline
