@@ -85,7 +85,8 @@ services:
   migrate:
     build:
       context: ../apps/api
-      args: {PIP_INDEX_URL: ${PIP_INDEX_URL:-}}
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     image: easyrs-api:${PREVIEW_IMAGE_TAG}
     environment:
       ENV: prod
@@ -118,7 +119,8 @@ services:
     image: easyrs-api:${PREVIEW_IMAGE_TAG}
     build:
       context: ../apps/api
-      args: {PIP_INDEX_URL: ${PIP_INDEX_URL:-}}
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     restart: unless-stopped
     environment:
       ENV: prod
