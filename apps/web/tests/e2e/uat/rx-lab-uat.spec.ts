@@ -118,7 +118,7 @@ test.describe("UAT-LAB", () => {
     // status transitioned to checked_in via the download
     await expect(page.getByRole("heading", { name: /— Checked-In/ }))
       .toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/submitted → checked_in/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Submitted → Checked-In/)).toBeVisible({ timeout: 15000 });
   });
 
   test("UAT-LAB-04 bundle manifest matches zip entries; attached STL inside",

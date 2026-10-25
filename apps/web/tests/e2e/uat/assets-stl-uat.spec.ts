@@ -40,7 +40,7 @@ test.describe("UAT-ASSET", () => {
     // both rows carry bytes + sha + format status
     for (const f of [FIX.upperBasic, FIX.lowerBasic]) {
       const row = page.locator("li", { hasText: f.sha256.slice(0, 16) });
-      await expect(row).toContainText("format_ok");
+      await expect(row).toContainText("valid mesh");
       await expect(row).toContainText(`${f.bytes} bytes`);
     }
   });
@@ -204,7 +204,7 @@ test.describe("UAT-ASSET", () => {
     const row = page.locator("li",
       { hasText: FIX.broken.sha256.slice(0, 16) });
     if (alert === 0 && (await row.count()) > 0) {
-      await expect(row).not.toContainText("format_ok");
+      await expect(row).not.toContainText("valid mesh");
       await expect(row.getByRole("button", { name: /preview/i }))
         .toHaveCount(0);
     } else {

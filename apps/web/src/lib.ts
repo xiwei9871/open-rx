@@ -37,14 +37,34 @@ export function fulfillmentLabel(s: string): string {
   return FULFILLMENT_LABELS[s] ?? s.replace(/_/g, " ");
 }
 
-/** "2026-10-25T04:14:40+00:00" → "Oct 25, 2026 04:14" (UTC display). */
+export function archLabel(a: string): string {
+  return { upper: "Upper arch", lower: "Lower arch",
+           both: "Both arches", na: "n/a" }[a] ?? a;
+}
+
+/** Display timezone for all rendered timestamps — set from the org's
+ *  configured timezone (org.timezone, e.g. America/Vancouver or
+ *  America/Toronto). Falls back to the viewer's local zone. */
+let DISPLAY_TZ = "";
+export function setDisplayTz(tz: string | null | undefined) {
+  DISPLAY_TZ = tz ?? "";
+}
+function tz(): string | undefined {
+  if (DISPLAY_TZ) return DISPLAY_TZ;
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
+  catch { return undefined; }
+}
+
+/** "2026-10-25T04:14:40+00:00" → "Oct 25, 2026, 16:14" in the org's
+ *  configured timezone (unambiguous en-CA presentation). */
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-US", {
+  return d.toLocaleString("en-CA", {
     month: "short", day: "numeric", year: "numeric",
     hour: "2-digit", minute: "2-digit", hour12: false,
+    timeZone: tz(),
   });
 }
 
@@ -70,7 +90,8 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", {
+  // Date-only fields are calendar dates, not instants — always UTC.
+  return d.toLocaleDateString("en-CA", {
     month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
   });
 }

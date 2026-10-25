@@ -6,6 +6,11 @@ import {
 
 import { fmtDateTime, useActionLock } from "../lib";
 
+function kindLabel(kind: string): string {
+  return { comment: "Comment", approval_required: "Approval required",
+           mention: "Mention" }[kind] ?? kind.replace(/_/g, " ");
+}
+
 /** COM-007 message center + COM-004 approval decisions (E2E-09). */
 export default function Inbox({ me, onOpenRx }: {
   me: Me; onOpenRx: (rxId: string) => void;
@@ -65,7 +70,8 @@ export default function Inbox({ me, onOpenRx }: {
           <p>
             <strong>{n.subject}</strong>{" "}
             <small className="muted">
-              [{n.kind} · {n.status}] {fmtDateTime(n.created_at)}</small>
+              {kindLabel(n.kind)}{n.status !== "read" ? ` · ${n.status}` : ""}
+              {" "}{fmtDateTime(n.created_at)}</small>
           </p>
           {n.body && <p>{n.body}</p>}
           <p className="row">

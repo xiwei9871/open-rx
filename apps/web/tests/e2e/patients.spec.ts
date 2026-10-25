@@ -56,7 +56,7 @@ test.describe("patient workbench", () => {
     });
     await page.getByLabel("Jaw").selectOption("upper");
     await page.getByRole("button", { name: "Upload STL" }).click();
-    await expect(page.getByText(/sha256 [0-9a-f]{16}/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/SHA-256 [0-9a-f]{16}/)).toBeVisible({ timeout: 15000 });
   });
 
   test("duplicate name+dob prompts confirmation", async ({ page }) => {
