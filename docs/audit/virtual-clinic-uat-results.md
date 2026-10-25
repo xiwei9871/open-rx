@@ -40,12 +40,27 @@ dockerised dev stack unless marked `API-assisted` (precondition only) or
 
 ### UAT-C — Files & STL (browser-verified)
 - Upper + lower STL upload, bytes/sha256/format_status displayed (ASSET-01).
-- Preview orbit/zoom/reset verified by canvas pixel diffs, not button smoke
-  (ASSET-02). Download bytes non-empty and SHA-256 equals generated source
-  (ASSET-03). Aborted PUT leaves no half-registered asset; reaper path
-  covered (ASSET-04). Truncated/malformed STL rejected — **real defect
-  found and fixed this round** (ASSET-05 + API regression). Unconnected
-  lab cannot reach patient assets (ASSET-06).
+- Preview orbit/zoom/reset verified by framebuffer pixel diffs, not button
+  smoke (ASSET-02). Download bytes non-empty and SHA-256 equals generated
+  source (ASSET-03). Interrupted upload covered twice: browser-side
+  aborted complete leaves no asset (ASSET-04), and the API integration
+  test `test_incomplete_put_rejected_and_staging_cleaned` proves partial
+  PUT -> complete 422 `content_mismatch`, no Asset row, staging object
+  deleted, plus no-PUT -> 409 and expired-session reaping — all against
+  real RustFS. Truncated/malformed STL rejected — **real defect found and
+  fixed this round** (ASSET-05 + API regression). Unconnected lab cannot
+  reach patient assets (ASSET-06).
+
+  CI note: ASSET-02 initially failed on the runner (71/72). Root cause was
+  *environmental, not product*: CI Chromium has no GPU and since Chromium
+  129 software WebGL is refused without `--enable-unsafe-swiftshader`, so
+  the canvas never mounted; additionally the preview canvas sat below the
+  fold so the synthetic `pointerdown` landed on off-viewport coordinates
+  (`elementFromPoint` → null) and OrbitControls never saw it. Fixes:
+  launch flag in `playwright.config.ts`, `preserveDrawingBuffer` on the
+  renderer, framebuffer readback via `toDataURL`, scroll-into-view before
+  measuring, and a diagnostics block that reports the preview alert + GL
+  renderer string if the canvas never mounts.
 
 ### UAT-D — Permissions, safety, exceptions
 - Unconnected-lab deep link to a foreign Rx: denied, no patient data
@@ -89,13 +104,18 @@ dockerised dev stack unless marked `API-assisted` (precondition only) or
   chart; arch is a per-item select. Usable but below EasyRx ergonomics.
 - **P2** Non-STL attachments: patient upload accepts arbitrary files and
   Rx attach links them, but the UAT covered STL only; PDF/photo bundle
-  behaviour is unverified.
+  behaviour is unverified — real PDF/photo clinical use is **not**
+  claimed.
 - **P2** Bundle reuse verified for unchanged content; change-detection
   triggers a new bundle per `bundle` module, but a rendering-field change
   (e.g. patient display name) was not explicitly re-verified in the
   browser.
 - **P3** No saved views/tags, no graphical dashboard beyond stat cards,
-  no localisation, antivirus scanning is not present (no stub surfaced).
+  no localisation. AV scanning exists only as the `_av_scan` hook
+  (returns clean unconditionally in dev) — not a real engine.
+- **P3** Synthetic STL fixtures are minimal generated geometry; they
+  prove pipeline mechanics only — they do not demonstrate performance or
+  compatibility with real intraoral scan meshes.
 - **P3** Dev database retained earlier duplicate `UAT-P03B` rows from
   pre-idempotency runs; `ensureDataset` keys on `external_ref` so tests
   are unaffected. Data-hygiene note only.

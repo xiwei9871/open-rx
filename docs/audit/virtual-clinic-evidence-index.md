@@ -39,7 +39,31 @@ dockerised dev stack (`E2E_BASE_URL=http://localhost:5173`).
 
 ## CI / large artifacts
 
-Full Playwright traces, videos and the `web-audit-evidence` bundle are
-uploaded as GitHub Actions artifacts on the `validate` workflow
-(`playwright-report`, `web-audit-evidence`). The `.stl` blobs themselves
-are never committed (CI forbids `*.stl`); they are regenerated per run.
+Full Playwright traces (`--trace retain-on-failure`), videos and the
+`web-audit-evidence` bundle are uploaded as GitHub Actions artifacts on
+the `validate` workflow (`playwright-report`, `web-audit-evidence`,
+`virtual-clinic-evidence`). The `.stl` blobs themselves are never
+committed (CI forbids `*.stl`); they are regenerated per run.
+
+## Gate integrity
+
+`run-clinic-audit.mjs` is a hard CI gate: every expected UAT-ID must have
+executed and passed or the script exits non-zero **after** evidence is
+written (`summary.json` carries an explicit `verdict: PASS|FAIL`, plus
+`missing_ids`/`failed_ids`/`suite_error`). Two CI steps prove this:
+
+- `--self-test` asserts `--inject-failure` exits 1.
+- A real `--inject-failure` run must exit non-zero or the e2e job fails.
+
+## Root-cause record — ASSET-02 on CI (run 40190486702)
+
+Failed as "canvas never mounted". Determined **environmental**: CI
+Chromium ≥129 refuses software WebGL without `--enable-unsafe-swiftshader`
+(verified locally: WebGL context is null with `--disable-gpu` alone,
+SwiftShader Vulkan with the flag). A second defect hid underneath: the
+preview canvas can sit below the fold, so synthetic pointer events landed
+on off-viewport coordinates and OrbitControls never received
+`pointerdown`. Fixes: launch flag, `preserveDrawingBuffer`, framebuffer
+readback via `toDataURL`, `scrollIntoViewIfNeeded`, and a diagnostics
+block that prints the preview alert + GL renderer string on failure.
+Real assertions retained — no skipping, no existence-only checks.

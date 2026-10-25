@@ -46,7 +46,10 @@ export default function StlPreview({ assetId }: { assetId: string }) {
 
         const w = mountRef.current.clientWidth || 280;
         const h = Math.min(340, Math.max(200, Math.round(w * 0.5)));
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer = new THREE.WebGLRenderer({ antialias: true,
+          // deterministic pixels for screenshot-based verification and for
+          // any consumer that reads the canvas outside the render loop
+          preserveDrawingBuffer: true });
         renderer.setSize(w, h);
         mountRef.current.appendChild(renderer.domElement);
 

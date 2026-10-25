@@ -261,6 +261,66 @@ async def test_session_owner_only_and_expired(client, s3ok, admindb):
                               json={"sha256": sha})).status_code == 409
 
 
+async def test_incomplete_put_rejected_and_staging_cleaned(
+        client, s3ok, admindb):
+    """UAT-ASSET-04b: an object-store PUT that never fully landed must not
+    produce an Asset — complete is refused and the staging object is
+    cleaned. Also covers: no-PUT session -> 409, expired session reaped."""
+    from botocore.exceptions import ClientError
+    from sqlalchemy import text
+    await login(client, "staff@pa.dev")
+
+    # Case 1: only HALF the declared bytes reach the staging object.
+    full = _binary_stl(2, tag=uuid.uuid4().bytes)
+    sha = hashlib.sha256(full).hexdigest()
+    r = await client.post("/v1/uploads", json={
+        "sha256": sha, "bytes": len(full), "kind": "stl", "jaw": "na"})
+    assert r.status_code == 201, r.text
+    sess = r.json()
+    assert (await _put_presigned(sess["upload_urls"][0],
+                                 full[: len(full) // 2])) == 200
+    r = await client.post(f"/v1/uploads/{sess['id']}/complete",
+                          json={"sha256": sha})
+    assert r.status_code == 422 and \
+        r.json()["detail"]["code"] == "content_mismatch", r.text
+    # no Asset was created and the partial staging object is gone
+    assert (await admindb.execute(text(
+        "SELECT count(*) FROM asset WHERE sha256 = :s"),
+        {"s": sha})).scalar_one() == 0
+    key = (await admindb.execute(text(
+        "SELECT storage_key FROM upload_session WHERE id = :i"),
+        {"i": sess["id"]})).scalar_one()
+    try:
+        await asyncio.to_thread(
+            s3().head_object, Bucket=_s.s3_bucket, Key=key)
+        raise AssertionError("partial staging object was not deleted")
+    except ClientError as e:
+        assert e.response["Error"]["Code"] in ("404", "NoSuchKey")
+
+    # Case 2: session declared but PUT never happens -> complete 409.
+    r = await client.post("/v1/uploads", json={
+        "sha256": hashlib.sha256(b"never-landed").hexdigest(),
+        "bytes": 12, "kind": "stl", "jaw": "na"})
+    sess2 = r.json()
+    r = await client.post(f"/v1/uploads/{sess2['id']}/complete", json={
+        "sha256": hashlib.sha256(b"never-landed").hexdigest()})
+    assert r.status_code == 409, r.text
+
+    # Case 3: expiry -> opportunistic reaper marks it and drops staging.
+    await admindb.execute(text(
+        "UPDATE upload_session SET expires_at = now() - interval '1s' "
+        "WHERE id = :i"), {"i": sess2["id"]})
+    await admindb.commit()
+    # any new declare runs the reaper inside the caller's transaction
+    r = await client.post("/v1/uploads", json={
+        "sha256": hashlib.sha256(b"trigger").hexdigest(),
+        "bytes": 7, "kind": "stl", "jaw": "na"})
+    assert r.status_code == 201, r.text
+    assert (await admindb.execute(text(
+        "SELECT status FROM upload_session WHERE id = :i"),
+        {"i": sess2["id"]})).scalar_one() == "expired"
+
+
 # ---- S1a1-01: namespaced storage keys --------------------------------------
 async def test_cross_org_same_bytes_independent_assets(client, s3ok, admindb):
     """Same bytes, two orgs in one tenant -> two independent assets with

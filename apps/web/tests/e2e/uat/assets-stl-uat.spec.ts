@@ -60,27 +60,73 @@ test.describe("UAT-ASSET", () => {
     }
     await previews.first().click();
     const canvas = page.locator("[aria-label=stl-preview] canvas").first();
+    // Diagnostics for CI (software GL): if the canvas never mounts, report
+    // the preview error and the GL renderer string instead of a bare timeout.
+    if (!(await canvas.isVisible().catch(() => false))) {
+      await page.waitForTimeout(3000);
+      if (!(await canvas.isVisible())) {
+        const alert = await page.getByRole("alert").allTextContents();
+        const gl = await page.evaluate(() => {
+          const c = document.createElement("canvas");
+          const g = c.getContext("webgl");
+          if (!g) return "NO_WEBGL_CONTEXT";
+          const d = g.getExtension("WEBGL_debug_renderer_info");
+          return d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : "unknown";
+        });
+        throw new Error(
+          `STL canvas never mounted. previewAlert=${JSON.stringify(alert)} webgl=${gl}`);
+      }
+    }
     await expect(canvas).toBeVisible({ timeout: 15000 });
+    // The preview can sit below the fold: pointer events at off-viewport
+    // coordinates never reach the canvas (elementFromPoint -> null), which
+    // silently broke the orbit drag in CI. Scroll first, then measure.
+    await canvas.scrollIntoViewIfNeeded();
     const box = (await canvas.boundingBox())!;
-    const shot = async () => Buffer.from(await canvas.screenshot());
+    // Read the real GL framebuffer (preserveDrawingBuffer is on) — immune
+    // to compositor timing differences between GPU and software-WebGL CI.
+    const shot = async () => await canvas.evaluate(
+      (c) => (c as HTMLCanvasElement).toDataURL("image/png"));
 
     // WebGL repaints are async — poll until pixels actually change.
-    const changed = async (prev: Buffer) => {
-      for (let i = 0; i < 12; i++) {
-        await page.waitForTimeout(250);
+    const changed = async (prev: string) => {
+      for (let i = 0; i < 20; i++) {
+        await page.waitForTimeout(400);
         const cur = await shot();
-        if (!cur.equals(prev)) return cur;
+        if (cur !== prev) return cur;
       }
       return null;
     };
 
-    const s0 = await shot();
+    // First prove the mesh actually rendered: sample the framebuffer —
+    // a blank canvas has exactly one colour, a rendered mesh does not.
+    const distinctColors = async () => canvas.evaluate((c) => {
+      const off = document.createElement("canvas");
+      off.width = (c as HTMLCanvasElement).width;
+      off.height = (c as HTMLCanvasElement).height;
+      const ctx = off.getContext("2d")!;
+      ctx.drawImage(c as HTMLCanvasElement, 0, 0);
+      const d = ctx.getImageData(0, 0, off.width, off.height).data;
+      const seen = new Set<number>();
+      for (let i = 0; i < d.length; i += 397 * 4) {
+        seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+      }
+      return seen.size;
+    });
+    let s0 = "";
+    for (let i = 0; i < 20 && (await distinctColors()) <= 1; i++) {
+      await page.waitForTimeout(400);
+      s0 = await shot();
+    }
+    expect(await distinctColors(),
+      "mesh must render non-blank pixels").toBeGreaterThan(1);
+    s0 = await shot();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 90, box.y + 40,
-                          { steps: 6 });
+    await page.mouse.move(box.x + box.width / 2 + 140, box.y + 40,
+                          { steps: 10 });
     await page.mouse.up();
-    const s1 = await changed(s0);
+    const s1 = await changed(s0!);
     expect(s1, "orbit drag must change pixels").toBeTruthy();
 
     await page.mouse.wheel(0, -300);
