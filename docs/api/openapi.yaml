@@ -55,6 +55,22 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+  /orgs/{orgId}:
+    patch:
+      tags: [iam]
+      operationId: updateOrg
+      summary: "Update org profile + defaults (doctor/location/timezone)"
+      x-scope: org_admin
+      parameters: [$ref: "#/components/parameters/OrgId"]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object}}}
+      responses:
+        "200":
+          description: "Updated org"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Org"}}}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
   /orgs/{orgId}/locations:
     get:
       tags: [iam]
@@ -82,6 +98,24 @@ paths:
           description: "Created location"
           content: {application/json: {schema: {$ref: "#/components/schemas/Location"}}}
         "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /orgs/{orgId}/locations/{locationId}:
+    patch:
+      tags: [iam]
+      operationId: updateLocation
+      summary: "Update location"
+      x-scope: org_admin
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - {name: locationId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object}}}
+      responses:
+        "200":
+          description: "Updated location"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Location"}}}
         "403": {$ref: "#/components/responses/Forbidden"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
   /orgs/{orgId}/members:
@@ -142,6 +176,24 @@ paths:
           description: "Created roster member"
           content: {application/json: {schema: {$ref: "#/components/schemas/RosterMember"}}}
         "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /orgs/{orgId}/roster/{rosterId}:
+    patch:
+      tags: [iam]
+      operationId: updateRosterMember
+      summary: "Update roster member (name/credentials/default/status); is_default is exclusive per kind"
+      x-scope: org_admin
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - {name: rosterId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object}}}
+      responses:
+        "200":
+          description: "Updated roster member"
+          content: {application/json: {schema: {$ref: "#/components/schemas/RosterMember"}}}
         "403": {$ref: "#/components/responses/Forbidden"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
   /org-connections:
@@ -896,6 +948,27 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+  /templates/{templateId}:
+    get:
+      tags: [prescriptions]
+      operationId: getTemplate
+      summary: "Get one template"
+      x-scope: owning org member
+      parameters: [$ref: "#/components/parameters/TemplateId"]
+      responses:
+        "200":
+          description: "Template"
+          content: {application/json: {schema: {$ref: "#/components/schemas/RxTemplate"}}}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    delete:
+      tags: [prescriptions]
+      operationId: deleteTemplate
+      summary: "Delete template"
+      x-scope: owning org member with rx:write
+      parameters: [$ref: "#/components/parameters/TemplateId"]
+      responses:
+        "204": {description: "Deleted"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /templates/{templateId}/shares:
     post:
       tags: [prescriptions]

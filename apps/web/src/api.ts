@@ -29,6 +29,8 @@ const OrgSchema = z.object({
   name: z.string(),
   status: z.string(),
   timezone: z.string(),
+  default_doctor_id: z.string().nullable(),
+  default_location_id: z.string().nullable(),
   created_at: z.string(),
 });
 export type Org = z.infer<typeof OrgSchema>;
@@ -379,6 +381,7 @@ export async function listRx(status?: string): Promise<{ items: Rx[]; counts: Re
 
 export async function createRx(body: {
   patient_id: string; lab_org_id?: string | null; doctor_id?: string | null;
+  location_id?: string | null;
   due_date?: string | null; notes?: string | null;
 }): Promise<Rx> {
   return req(RxSchema, "/api/v1/rx", {
@@ -491,5 +494,131 @@ export async function listConnections(orgId: string): Promise<Connection[]> {
 export async function listRoster(orgId: string): Promise<z.infer<typeof RosterSchema>[]> {
   const r = await req(z.object({ items: z.array(RosterSchema) }),
     `/api/v1/orgs/${orgId}/roster`);
+  return r.items;
+}
+
+// ---------- M1: org admin / studio ----------
+
+export async function updateOrg(orgId: string, body: {
+  name?: string; timezone?: string;
+  default_doctor_id?: string | null; default_location_id?: string | null;
+}): Promise<Org> {
+  return req(OrgSchema, `/api/v1/orgs/${orgId}`, {
+    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+const LocationSchema = z.object({
+  id: z.string(), org_id: z.string(), name: z.string(),
+  address: z.string().nullable(), phone: z.string().nullable(),
+});
+export type Location = z.infer<typeof LocationSchema>;
+
+export async function listLocations(orgId: string): Promise<Location[]> {
+  const r = await req(z.object({ items: z.array(LocationSchema) }),
+    `/api/v1/orgs/${orgId}/locations`);
+  return r.items;
+}
+
+export async function createLocation(orgId: string, body: {
+  name: string; address?: string | null; phone?: string | null;
+}): Promise<Location> {
+  return req(LocationSchema, `/api/v1/orgs/${orgId}/locations`, {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function updateLocation(orgId: string, locationId: string, body: {
+  name?: string; address?: string | null; phone?: string | null;
+}): Promise<Location> {
+  return req(LocationSchema, `/api/v1/orgs/${orgId}/locations/${locationId}`, {
+    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function createRosterMember(orgId: string, body: {
+  kind: "doctor" | "staff"; display_name: string;
+  credentials?: string | null; is_default?: boolean;
+}): Promise<z.infer<typeof RosterSchema>> {
+  return req(RosterSchema, `/api/v1/orgs/${orgId}/roster`, {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function updateRosterMember(orgId: string, rosterId: string, body: {
+  display_name?: string; credentials?: string | null;
+  is_default?: boolean; status?: "active" | "disabled";
+}): Promise<z.infer<typeof RosterSchema>> {
+  return req(RosterSchema, `/api/v1/orgs/${orgId}/roster/${rosterId}`, {
+    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+const FullConnectionSchema = ConnectionSchema.extend({
+  initiated_by_org_id: z.string(),
+  decided_at: z.string().nullable(),
+  granted_scopes: z.array(z.string()),
+});
+export type FullConnection = z.infer<typeof FullConnectionSchema>;
+
+export async function listFullConnections(orgId: string): Promise<FullConnection[]> {
+  const r = await req(z.object({ items: z.array(FullConnectionSchema) }),
+    `/api/v1/org-connections?org_id=${orgId}`);
+  return r.items;
+}
+
+export async function requestConnection(practiceOrgId: string,
+                                        labOrgId: string): Promise<FullConnection> {
+  return req(FullConnectionSchema, "/api/v1/org-connections", {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ practice_org_id: practiceOrgId,
+                           lab_org_id: labOrgId, granted_scopes: [] }),
+  });
+}
+
+export async function decideConnection(connId: string, action: string,
+                                       version: number): Promise<FullConnection> {
+  return req(FullConnectionSchema, `/api/v1/org-connections/${connId}`, {
+    method: "PATCH", headers: JSON_HEADERS,
+    body: JSON.stringify({ action, expected_version: version }),
+  });
+}
+
+export async function changePassword(current: string,
+                                     next: string): Promise<void> {
+  await req204("/api/v1/auth/password", {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ old_password: current, new_password: next }),
+  });
+}
+
+const RxTemplateSchema = z.object({
+  id: z.string(), org_id: z.string(), name: z.string(),
+  payload: z.any(), created_at: z.string(),
+});
+export type RxTemplate = z.infer<typeof RxTemplateSchema>;
+
+export async function listRxTemplates(): Promise<RxTemplate[]> {
+  const r = await req(z.object({ items: z.array(RxTemplateSchema) }),
+    "/api/v1/templates");
+  return r.items;
+}
+
+export async function createRxTemplate(name: string,
+                                       payload: unknown): Promise<RxTemplate> {
+  return req(RxTemplateSchema, "/api/v1/templates", {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ name, payload }),
+  });
+}
+
+export async function deleteRxTemplate(id: string): Promise<void> {
+  await req204(`/api/v1/templates/${id}`, { method: "DELETE",
+                                              headers: JSON_HEADERS });
+}
+
+export async function listRxHistory(patientId: string): Promise<Rx[]> {
+  const r = await req(z.object({ items: z.array(RxSchema) }),
+    `/api/v1/patients/${patientId}/rx-history`);
   return r.items;
 }

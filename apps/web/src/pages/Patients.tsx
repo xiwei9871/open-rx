@@ -34,6 +34,12 @@ export default function PatientsPage({ me, onOpen }: {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  // PAT-002: search-as-you-type — debounce keystrokes, keep manual submit.
+  useEffect(() => {
+    const t = setTimeout(() => { void refresh(q || undefined); }, 300);
+    return () => clearTimeout(t);
+  }, [q, refresh]);
+
   async function onSearch(e: React.FormEvent) {
     e.preventDefault();
     await refresh(q || undefined);

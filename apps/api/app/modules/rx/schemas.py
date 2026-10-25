@@ -136,6 +136,21 @@ class CatalogItemOut(BaseModel):
     option_schema: dict | None
 
 
+class RxTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    # items + optional defaults; ids re-validated server-side.
+    payload: dict
+
+
+class RxTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    org_id: uuid.UUID
+    name: str
+    payload: dict
+    created_at: datetime
+
+
 class AttachmentCreate(BaseModel):
     asset_id: uuid.UUID
     role: str = Field(pattern="^(original|attachment)$")

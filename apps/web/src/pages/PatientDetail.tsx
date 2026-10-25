@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError, createCase, deletePatient, downloadUrl, getPatient,
-  grantReference, listCases, listPatientAssets, revokeReference,
-  updatePatient, uploadAsset,
-  type Case, type Me, type Patient, type PatientAsset,
+  grantReference, listCases, listPatientAssets, listRxHistory,
+  revokeReference, updatePatient, uploadAsset,
+  type Case, type Me, type Patient, type PatientAsset, type Rx,
 } from "../api";
+import StlPreview from "../components/StlPreview";
 
 const input = { display: "block", width: "100%", marginBottom: 6, padding: 4 } as const;
 
-export default function PatientDetailPage({ me, patientId, onDeleted }: {
+export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }: {
   me: Me; patientId: string; onDeleted: () => void;
+  onOpenRx?: (rxId: string) => void;
 }) {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [cases, setCases] = useState<Case[]>([]);
+  const [rxHistory, setRxHistory] = useState<Rx[]>([]);
   const [assets, setAssets] = useState<PatientAsset[]>([]);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [denied, setDenied] = useState(false);
   const [edit, setEdit] = useState({ first_name: "", last_name: "", notes: "" });
@@ -36,6 +40,9 @@ export default function PatientDetailPage({ me, patientId, onDeleted }: {
       setEdit({ first_name: p.first_name, last_name: p.last_name, notes: p.notes ?? "" });
       setCases(await listCases(patientId));
       setAssets(await listPatientAssets(patientId));
+      if (me.permissions.includes("rx:read")) {
+        setRxHistory(await listRxHistory(patientId));
+      }
     } catch (ex) {
       if (ex instanceof ApiError && ex.status === 403) setDenied(true);
       else setErr(ex instanceof Error ? ex.message : String(ex));
@@ -142,6 +149,18 @@ export default function PatientDetailPage({ me, patientId, onDeleted }: {
         </form>
       )}
 
+      <h3>Prescription history</h3>
+      {rxHistory.length === 0 ? <p>No prescriptions.</p> : (
+        <ul>{rxHistory.map((r) => (
+          <li key={r.id}>
+            <a href="#" onClick={(e) => { e.preventDefault(); onOpenRx?.(r.id); }}>
+              {r.rx_number}
+            </a>{" "}
+            — {r.status} · due {r.due_date ?? "—"} · {r.created_at.slice(0, 10)}
+          </li>
+        ))}</ul>
+      )}
+
       <h3>Files</h3>
       {assets.length === 0 ? <p>No files.</p> : (
         <ul>{assets.map((a) => (
@@ -151,6 +170,12 @@ export default function PatientDetailPage({ me, patientId, onDeleted }: {
             {" "}<button type="button" onClick={async () => {
               const u = await downloadUrl(a.asset_id); window.open(u, "_blank");
             }}>Download</button>
+            {a.asset.kind === "stl" && a.asset.format_status === "format_ok" && (
+              <button type="button" aria-label={`Preview ${a.asset_id}`}
+                onClick={() => setPreviewId(
+                  previewId === a.asset_id ? null : a.asset_id)}>Preview</button>
+            )}
+            {previewId === a.asset_id && <StlPreview assetId={a.asset_id} />}
             {canShare && (
               <button type="button" onClick={async () => {
                 await revokeReference(a.asset_id, a.subject_type, a.subject_id);

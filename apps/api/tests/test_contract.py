@@ -30,6 +30,9 @@ REQUIRED_SPEC_OPS = {
     "listRxBundles",
     "attachToRx", "listRxComments", "createRxComment", "listRxTransitions",
     "patientRxHistory", "listParts", "listAppliances",
+    # M1: org admin + templates
+    "updateOrg", "updateLocation", "updateRosterMember",
+    "listTemplates", "createTemplate", "getTemplate", "deleteTemplate",
 }
 EXTRA_AUTH_OPS = {
     "login", "verifyTwoFA", "logout", "me",

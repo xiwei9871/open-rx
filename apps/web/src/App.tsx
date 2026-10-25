@@ -5,10 +5,12 @@ import PatientDetailPage from "./pages/PatientDetail";
 import RxListPage from "./pages/RxList";
 import RxCreatePage from "./pages/RxCreate";
 import RxDetailPage from "./pages/RxDetail";
+import OrgSettingsPage from "./pages/OrgSettings";
 
 type Route =
   | { name: "patients" } | { name: "patient"; id: string }
-  | { name: "rx" } | { name: "rx-new" } | { name: "rx-detail"; id: string };
+  | { name: "rx" } | { name: "rx-new" } | { name: "rx-detail"; id: string }
+  | { name: "settings" };
 
 const page = { fontFamily: "system-ui", maxWidth: 720, margin: "2rem auto" } as const;
 const input = { display: "block", width: "100%", marginBottom: 8, padding: 4 } as const;
@@ -111,6 +113,9 @@ export default function App() {
           {route.name !== "rx" && (
             <button onClick={() => setRoute({ name: "rx" })}>Prescriptions</button>
           )}
+          {route.name !== "settings" && (
+            <button onClick={() => setRoute({ name: "settings" })}>Settings</button>
+          )}
           <button onClick={onLogout}>Sign out</button>
         </nav>
       </header>
@@ -125,11 +130,14 @@ export default function App() {
       ) : route.name === "rx-detail" ? (
         <RxDetailPage me={user} rxId={route.id}
           onBack={() => setRoute({ name: "rx" })} />
+      ) : route.name === "settings" ? (
+        <OrgSettingsPage me={user} />
       ) : route.name === "patients" ? (
         <PatientsPage me={user} onOpen={(id) => setRoute({ name: "patient", id })} />
       ) : (
         <PatientDetailPage me={user} patientId={route.id}
-          onDeleted={() => setRoute({ name: "patients" })} />
+          onDeleted={() => setRoute({ name: "patients" })}
+          onOpenRx={(id) => setRoute({ name: "rx-detail", id })} />
       )}
     </main>
   );

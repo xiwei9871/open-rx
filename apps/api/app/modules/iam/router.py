@@ -22,8 +22,9 @@ from app.modules.iam.models import (
 )
 from app.modules.iam.schemas import (
     AuditEventOut, ConnectionTransition, LocationCreate, LocationOut,
-    MemberInvite, MembershipOut, OrgConnectionOut, OrgConnectionRequest,
-    OrgCreate, OrgOut, RosterMemberCreate, RosterMemberOut,
+    LocationUpdate, MemberInvite, MembershipOut, OrgConnectionOut,
+    OrgConnectionRequest, OrgCreate, OrgOut, OrgUpdate, RosterMemberCreate,
+    RosterMemberOut, RosterMemberUpdate,
 )
 from app.security import hash_password
 
@@ -70,6 +71,41 @@ async def create_org(body: OrgCreate, request: Request, db: Db,
     return org
 
 
+@router.patch("/orgs/{org_id}", response_model=OrgOut, operation_id="updateOrg")
+async def update_org(org_id: uuid.UUID, body: OrgUpdate, request: Request,
+                     db: Db, p: Me, _g=Depends(require_perm("org:manage"))):
+    await limit_writes(p)
+    await _require_member_of(db, p, org_id)
+    org = _org_in_tenant(await db.get(Organization, org_id), p)
+    fields = body.model_dump(exclude_unset=True)
+    if "default_doctor_id" in fields and fields["default_doctor_id"] is not None:
+        doc = await db.get(RosterMember, fields["default_doctor_id"])
+        if not doc or doc.org_id != org.id or doc.tenant_id != p.tenant_id \
+                or doc.kind != "doctor" or doc.status != "active":
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_default_doctor",
+                "message": "Default doctor must be an active doctor in this org"})
+    if "default_location_id" in fields and fields["default_location_id"] is not None:
+        loc = await db.get(Location, fields["default_location_id"])
+        if not loc or loc.org_id != org.id or loc.tenant_id != p.tenant_id:
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_default_location",
+                "message": "Default location must belong to this org"})
+    before = {k: str(getattr(org, k)) if getattr(org, k) is not None else None
+              for k in fields}
+    for k, v in fields.items():
+        setattr(org, k, v)
+    await db.flush()
+    record(db, action="org.updated", object_type="organization",
+           object_id=org.id, tenant_id=p.tenant_id, org_id=org.id,
+           actor_user_id=p.user.id, request=request,
+           before=before,
+           after={k: (str(v) if v is not None else None)
+                  for k, v in fields.items()})
+    await tenant_commit(db, p)
+    return org
+
+
 # ---------------- locations ----------------
 @router.get("/orgs/{org_id}/locations", response_model=dict,
             operation_id="listLocations")
@@ -95,6 +131,28 @@ async def create_location(org_id: uuid.UUID, body: LocationCreate,
     record(db, action="location.created", object_type="location", object_id=loc.id,
            tenant_id=p.tenant_id, org_id=org_id, actor_user_id=p.user.id,
            request=request, after=body.model_dump())
+    await tenant_commit(db, p)
+    return loc
+
+
+@router.patch("/orgs/{org_id}/locations/{location_id}",
+              response_model=LocationOut, operation_id="updateLocation")
+async def update_location(org_id: uuid.UUID, location_id: uuid.UUID,
+                          body: LocationUpdate, request: Request, db: Db,
+                          p: Me, _g=Depends(require_perm("location:write"))):
+    await limit_writes(p)
+    await _require_member_of(db, p, org_id)
+    loc = await db.get(Location, location_id)
+    if not loc or loc.org_id != org_id or loc.tenant_id != p.tenant_id:
+        raise HTTPException(status_code=403, detail={
+            "code": "forbidden", "message": "Access denied"})
+    for k, v in body.model_dump(exclude_unset=True).items():
+        setattr(loc, k, v)
+    await db.flush()
+    record(db, action="location.updated", object_type="location",
+           object_id=loc.id, tenant_id=p.tenant_id, org_id=org_id,
+           actor_user_id=p.user.id, request=request,
+           after=body.model_dump(exclude_unset=True))
     await tenant_commit(db, p)
     return loc
 
@@ -177,6 +235,36 @@ async def add_roster(org_id: uuid.UUID, body: RosterMemberCreate,
     record(db, action="roster.created", object_type="roster_member",
            object_id=r.id, tenant_id=p.tenant_id, org_id=org_id,
            actor_user_id=p.user.id, request=request, after=body.model_dump(mode="json"))
+    await tenant_commit(db, p)
+    return r
+
+
+@router.patch("/orgs/{org_id}/roster/{roster_id}",
+              response_model=RosterMemberOut, operation_id="updateRosterMember")
+async def update_roster(org_id: uuid.UUID, roster_id: uuid.UUID,
+                        body: RosterMemberUpdate, request: Request, db: Db,
+                        p: Me, _g=Depends(require_perm("roster:write"))):
+    await limit_writes(p)
+    await _require_member_of(db, p, org_id)
+    r = await db.get(RosterMember, roster_id)
+    if not r or r.org_id != org_id or r.tenant_id != p.tenant_id:
+        raise HTTPException(status_code=403, detail={
+            "code": "forbidden", "message": "Access denied"})
+    fields = body.model_dump(exclude_unset=True)
+    for k, v in fields.items():
+        setattr(r, k, v)
+    # One default per kind per org: setting is_default clears siblings.
+    if fields.get("is_default"):
+        others = (await db.execute(select(RosterMember).where(
+            RosterMember.org_id == org_id, RosterMember.kind == r.kind,
+            RosterMember.id != r.id, RosterMember.is_default.is_(True))
+        )).scalars().all()
+        for o in others:
+            o.is_default = False
+    await db.flush()
+    record(db, action="roster.updated", object_type="roster_member",
+           object_id=r.id, tenant_id=p.tenant_id, org_id=org_id,
+           actor_user_id=p.user.id, request=request, after=fields)
     await tenant_commit(db, p)
     return r
 

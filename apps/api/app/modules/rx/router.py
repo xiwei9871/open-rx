@@ -32,11 +32,13 @@ from app.modules.iam.models import (Location, OrgConnection, Organization,
                                     RosterMember)
 from app.storage import s3, s3_presign
 from app.modules.rx.models import (CatalogItem, IdempotencyRecord, Rx,
-                                   RxBundle, RxComment, RxItem, RxTransition)
+                                   RxBundle, RxComment, RxItem, RxTemplate,
+                                   RxTransition)
 from app.modules.rx.schemas import (AttachmentCreate, CatalogItemOut,
                                     CommentCreate, CommentOut, RxBundleOut,
                                     RxCheckIn, RxCreate, RxItemOut,
                                     RxItemsReplace, RxOut, RxSubmit,
+                                    RxTemplateCreate, RxTemplateOut,
                                     RxTransitionOut, RxUnsubmit, RxUpdate)
 
 router = APIRouter(tags=["prescriptions"])
@@ -160,6 +162,109 @@ async def list_appliances(db: Db, p: Me, _g=Depends(require_perm("rx:read"))):
                            OrgConnection.status == "accepted"))))
         .order_by(CatalogItem.code))).scalars().all()
     return {"items": [CatalogItemOut.model_validate(r) for r in rows]}
+
+
+# ---------------- rx templates (RX-010, practice-owned; sharing DEFER) --------
+def _template_visible(t: RxTemplate | None, p: Principal) -> RxTemplate:
+    if not t or t.tenant_id != p.tenant_id or t.org_id != p.org.id:
+        raise HTTPException(status_code=403, detail={
+            "code": "forbidden", "message": "Access denied"})
+    return t
+
+
+async def _validate_template_payload(db: AsyncSession, p: Principal,
+                                     payload: dict) -> dict:
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise HTTPException(status_code=422, detail={
+            "code": "invalid_template",
+            "message": "payload.items must be a list"})
+    ids = []
+    for it in items:
+        if not isinstance(it, dict) or not it.get("catalog_item_id"):
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_template",
+                "message": "each item needs catalog_item_id"})
+        try:
+            ids.append(uuid.UUID(str(it["catalog_item_id"])))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_template",
+                "message": "catalog_item_id must be a UUID"}) from None
+    if ids:
+        found = (await db.execute(select(CatalogItem.id).where(
+            CatalogItem.id.in_(ids), CatalogItem.active.is_(True),
+            or_(CatalogItem.owner_org_id.is_(None),
+                CatalogItem.owner_org_id == p.org.id,
+                CatalogItem.owner_org_id.in_(
+                    select(OrgConnection.lab_org_id).where(
+                        OrgConnection.practice_org_id == p.org.id,
+                        OrgConnection.status == "accepted"))))
+        )).scalars().all()
+        if len(found) != len(set(ids)):
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_template",
+                "message": "template references an unknown or inactive catalog item"})
+    return payload
+
+
+@router.get("/templates", response_model=dict, operation_id="listTemplates")
+async def list_rx_templates(db: Db, p: Me,
+                            _g=Depends(require_perm("rx:read"))):
+    rows = (await db.execute(
+        select(RxTemplate).where(RxTemplate.org_id == p.org.id,
+                                 RxTemplate.tenant_id == p.tenant_id)
+        .order_by(RxTemplate.name))).scalars().all()
+    return {"items": [RxTemplateOut.model_validate(t) for t in rows]}
+
+
+@router.post("/templates", response_model=RxTemplateOut, status_code=201,
+             operation_id="createTemplate")
+async def create_rx_template(body: RxTemplateCreate, request: Request, db: Db,
+                             p: Me, _g=Depends(require_perm("rx:write"))):
+    await limit_writes(p)
+    if p.org.kind == "lab":
+        await _deny(db, request, p, "lab_template_forbidden")
+    payload = await _validate_template_payload(db, p, body.payload)
+    t = RxTemplate(tenant_id=p.tenant_id, org_id=p.org.id,
+                   created_by_user_id=p.user.id, name=body.name,
+                   payload=payload)
+    db.add(t)
+    await db.flush()
+    record(db, action="rx_template.created", object_type="rx_template",
+           object_id=t.id, tenant_id=p.tenant_id, org_id=p.org.id,
+           actor_user_id=p.user.id, request=request,
+           after={"name": body.name})
+    await tenant_commit(db, p)
+    return t
+
+
+@router.get("/templates/{template_id}", response_model=RxTemplateOut,
+            operation_id="getTemplate")
+async def get_rx_template(template_id: uuid.UUID, request: Request, db: Db,
+                          p: Me, _g=Depends(require_perm("rx:read"))):
+    t = await db.get(RxTemplate, template_id)
+    try:
+        return _template_visible(t, p)
+    except HTTPException:
+        await _deny(db, request, p, "rx_template_not_visible")
+
+
+@router.delete("/templates/{template_id}", status_code=204,
+               operation_id="deleteTemplate")
+async def delete_rx_template(template_id: uuid.UUID, request: Request, db: Db,
+                             p: Me, _g=Depends(require_perm("rx:write"))):
+    await limit_writes(p)
+    t = await db.get(RxTemplate, template_id)
+    try:
+        _template_visible(t, p)
+    except HTTPException:
+        await _deny(db, request, p, "rx_template_not_visible")
+    await db.delete(t)
+    record(db, action="rx_template.deleted", object_type="rx_template",
+           object_id=template_id, tenant_id=p.tenant_id, org_id=p.org.id,
+           actor_user_id=p.user.id, request=request)
+    await tenant_commit(db, p)
 
 
 # ---------------- rx ----------------------------------------------------------

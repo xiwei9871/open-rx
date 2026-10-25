@@ -162,6 +162,21 @@ class IdempotencyRecord(Base, IdMixin, CreatedAtMixin):
     response_json: Mapped[dict] = mapped_column(JSONB)
 
 
+class RxTemplate(Base, IdMixin, CreatedAtMixin):
+    """RX-010: practice-owned reusable Rx payload (items + defaults).
+
+    Template sharing between orgs is DEFER (IAM-008/RX-011): rows are
+    org-scoped only; apply re-validates catalog ids at write time."""
+    __tablename__ = "rx_template"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id"), index=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    name: Mapped[str] = mapped_column(String(200))
+    payload: Mapped[dict] = mapped_column(JSONB)
+
+
 class RxComment(Base, IdMixin, CreatedAtMixin):
     __tablename__ = "rx_comment"
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
