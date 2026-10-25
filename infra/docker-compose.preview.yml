@@ -138,7 +138,10 @@ services:
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
       CORS_ORIGINS: ${CORS_ORIGINS:?required}
       UPLOAD_MAX_BYTES: ${UPLOAD_MAX_BYTES:-104857600}
-      # Prod-tight rate limits — no dev overrides in the preview.
+      # Invited evaluators sign in repeatedly within minutes; keep limits
+      # finite but tuned for demo use (still far below dev's 300).
+      RL_LOGIN_EMAIL_LIMIT: ${RL_LOGIN_EMAIL_LIMIT:-30}
+      RL_LOGIN_IP_LIMIT: ${RL_LOGIN_IP_LIMIT:-120}
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}

@@ -3,6 +3,9 @@ import { execSync } from "node:child_process";
 // Fresh rate-limit buckets for repeat E2E runs. Best-effort: CI brings a new
 // redis; locally we flush the dev container's db (synthetic data only).
 export default function globalSetup() {
+  // Preview/public acceptance runs point at a deployed stack — never touch
+  // its data plane from the dev-only reset hooks.
+  if (process.env.PREVIEW_BASE_URL || process.env.E2E_BASE_URL) return;
   try {
     execSync("docker exec easyrs-dev-redis-1 redis-cli FLUSHDB",
              { stdio: "ignore", timeout: 5000 });
