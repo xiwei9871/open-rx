@@ -49,27 +49,40 @@ bash infra/preview/deploy.sh <new-tag>     # builds easyrs-*:<tag>, restarts
 `--token "$PREVIEW_DEMO_TOKEN"` — the flag alone is inert, and `ENV=prod`
 guards remain fully enforced (prod boot refuses dev defaults).
 
-## Public HTTPS path (operator action required)
+## Public HTTPS path (live since 2026-10-25)
 
-Public reachability goes through the existing lanproxy server
-(`www.manqiaotechnology.com:8090` admin console). Two mappings are needed:
+Public ingress is the company gateway at `192.168.3.224` — the same host
+as public `101.207.144.86` (eno2) and PPPoE `175.152.66.12` (ppp0). It runs
+aaPanel nginx on 80/443 serving all `*.manqiaotechnology.com` subdomains.
+Access: `ssh -i manq.prv manq_dev@192.168.3.224` (sudo group; `nginx -t` /
+`nginx -s reload` are NOPASSWD; vhost dir written via docker bind-mount —
+the account is in the `docker` group).
 
-| Public hostname | Target |
+Two vhosts were added (aaPanel convention, files under
+`/www/server/panel/vhost/nginx/`):
+
+| Vhost conf | Proxy target |
 |---|---|
-| `easyrx.manqiaotechnology.com` | `192.168.3.185:5190` (web, proxies /api) |
-| `easyrx-s3.manqiaotechnology.com` (or a path-based route) | `192.168.3.185:5191` (rustfs) |
+| `easyrx.manqiaotechnology.com.conf` | `http://192.168.3.185:5190` (web) |
+| `easyrx-s3.manqiaotechnology.com.conf` | `http://192.168.3.185:5191` (RustFS presigned endpoint) |
 
-Then set in `.env.preview`:
+Both terminate TLS with the existing `*.manqiaotechnology.com`
+Let's Encrypt wildcard copied to
+`/www/server/panel/vhost/cert/easyrx.manqiaotechnology.com/`
+(valid 2026-09-06 → 2026-12-05). S3 vhost sets `client_max_body_size 210m`
+and `proxy_request_buffering off` for large presigned PUTs; `Host` is
+passed through so SigV4 signatures stay valid. Port 80 redirects to 443.
+
+`.env.preview` on `.185` is set to:
 
 ```
 CORS_ORIGINS=https://easyrx.manqiaotechnology.com
 S3_PUBLIC_ENDPOINT_URL=https://easyrx-s3.manqiaotechnology.com
 ```
 
-and `docker compose … up -d api`. Verify: browser PUT/GET presigned URLs,
-CORS preflight, HTTPS certificate, and that `easyrx` host does not collide
-with the existing wildcard nginx config (it must be a NEW vhost/route —
-never edit the Dify `server_name _` file).
+Invitation gate: application-layer (EasyRS demo accounts only — there is
+no public registration path); the task decision was app-layer invite,
+not the gateway's Sa-Token system.
 
 ## Demo data reset
 
