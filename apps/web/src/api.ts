@@ -400,7 +400,7 @@ export async function listRx(status?: string, opts?: {
 
 export async function createRx(body: {
   patient_id: string; lab_org_id?: string | null; doctor_id?: string | null;
-  location_id?: string | null;
+  location_id?: string | null; case_id?: string | null;
   due_date?: string | null; notes?: string | null;
 }): Promise<Rx> {
   return req(RxSchema, "/api/v1/rx", {
@@ -718,6 +718,16 @@ export async function listRxAttachments(rxId: string): Promise<RxAttachment[]> {
   const r = await req(z.object({ items: z.array(RxAttachmentSchema) }),
     `/api/v1/rx/${rxId}/attachments`);
   return r.items;
+}
+
+export async function attachToRx(rxId: string, assetId: string,
+                                 role: "original" | "attachment"):
+    Promise<{ id: string }> {
+  return req(z.object({ id: z.string() }),
+    `/api/v1/rx/${rxId}/attachments`, {
+      method: "POST", headers: JSON_HEADERS,
+      body: JSON.stringify({ asset_id: assetId, role }),
+    });
 }
 
 export async function createRxCommentEx(rxId: string, body: string,

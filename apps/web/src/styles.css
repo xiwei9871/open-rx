@@ -100,6 +100,7 @@ label.field input, label.field select, label.field textarea { width: 100%; }
 .card > h3:first-child { margin-top: 0; }
 .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .row.end { justify-content: flex-end; }
+.row.spread { justify-content: space-between; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
 .grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; }
 .muted { color: var(--muted); }

@@ -10,5 +10,10 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
     channel: process.env.E2E_BROWSER_CHANNEL || undefined,
+    // CI runners have no GPU: Chromium >=129 refuses software WebGL
+    // (SwiftShader) unless explicitly enabled — without this the STL
+    // preview can never create a GL context there. Harmless on machines
+    // with real GPUs.
+    launchOptions: { args: ["--enable-unsafe-swiftshader"] },
   },
 });

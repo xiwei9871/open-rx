@@ -1,0 +1,50 @@
+uat_id,title,file,ok,duration_ms
+UAT-ASSET-01,"UAT-ASSET › UAT-ASSET-01 upload upper+lower STL to a patient; bytes/sha/format shown",uat/assets-stl-uat.spec.ts,true,3297
+UAT-ASSET-02,"UAT-ASSET › UAT-ASSET-02 STL preview: orbit/zoom/reset produce real pixels",uat/assets-stl-uat.spec.ts,true,6487
+UAT-ASSET-03,"UAT-ASSET › UAT-ASSET-03 patient STL download is non-empty and hash-verified",uat/assets-stl-uat.spec.ts,true,1724
+UAT-ASSET-04,"UAT-ASSET › UAT-ASSET-04 interrupted upload leaves no half-baked asset",uat/assets-stl-uat.spec.ts,true,1725
+UAT-ASSET-05,"UAT-ASSET › UAT-ASSET-05 broken STL is rejected or never format_ok",uat/assets-stl-uat.spec.ts,true,4601
+UAT-ASSET-06,"UAT-ASSET › UAT-ASSET-06 unconnected lab cannot reach patient assets",uat/assets-stl-uat.spec.ts,true,359
+UAT-AUTH-01,"UAT-AUTH › UAT-AUTH-01 login lands on home, cookies set, me() identity",uat/auth-uat.spec.ts,true,1215
+UAT-AUTH-02,"UAT-AUTH › UAT-AUTH-02 logout clears both cookies; no revive; deep-link denied",uat/auth-uat.spec.ts,true,773
+UAT-AUTH-03,"UAT-AUTH › UAT-AUTH-03 refresh keeps patient + rx-detail context",uat/auth-uat.spec.ts,true,1290
+UAT-AUTH-04,"UAT-AUTH › UAT-AUTH-04 2FA challenge rejects wrong code, accepts right code",uat/auth-uat.spec.ts,true,826
+UAT-COLLAB-01,"UAT-COLLAB › UAT-COLLAB-01 two-way comments persist after reload",uat/collaboration-approval-uat.spec.ts,true,4941
+UAT-COLLAB-02,"UAT-COLLAB › UAT-COLLAB-02 comment anchored to an attachment tracks the file",uat/collaboration-approval-uat.spec.ts,true,1645
+UAT-COLLAB-03,"UAT-COLLAB › UAT-COLLAB-03 lab notification reaches practice inbox, mark read",uat/collaboration-approval-uat.spec.ts,true,1559
+UAT-COLLAB-04,"UAT-COLLAB › UAT-COLLAB-04 approval request -> approve bound to rx version",uat/collaboration-approval-uat.spec.ts,true,2109
+UAT-COLLAB-05,"UAT-COLLAB › UAT-COLLAB-05 version drift: editing Rx after approval request must not silently approve old version",uat/collaboration-approval-uat.spec.ts,true,797
+UAT-FULFILL-01,"UAT-FULFILL › UAT-FULFILL-01..04 QC->ship->receive->deliver full loop on web",uat/fulfillment-uat.spec.ts,true,3465
+UAT-FULFILL-05,"UAT-FULFILL › UAT-FULFILL-05 dashboard + status filters show lifecycle states",uat/fulfillment-uat.spec.ts,true,578
+UAT-JOURNEY,"UAT-JOURNEY › full clinic loop: P05 retainer from intake to delivery",uat/journey-full-clinic-uat.spec.ts,true,7261
+UAT-NEG-01,"UAT-NEG › UAT-NEG-01 unconnected-lab deep link leaks nothing",uat/negative-guardrails-uat.spec.ts,true,2077
+UAT-NEG-02,"UAT-NEG › UAT-NEG-02 practice cannot run lab-only actions",uat/negative-guardrails-uat.spec.ts,true,977
+UAT-NEG-03,"UAT-NEG › UAT-NEG-03 double-clicks create no duplicate side effects",uat/negative-guardrails-uat.spec.ts,true,4263
+UAT-NEG-04,"UAT-NEG › UAT-NEG-04 API outage surfaces an explicit error, never silent",uat/negative-guardrails-uat.spec.ts,true,620
+UAT-NEG-05,"UAT-NEG › UAT-NEG-05 back/forward honours URL routing",uat/negative-guardrails-uat.spec.ts,true,659
+UAT-PAT-01,"UAT-PAT › UAT-PAT-01 create patient via web; required fields; list + detail",uat/patients-cases-uat.spec.ts,true,1375
+UAT-PAT-02,"UAT-PAT › UAT-PAT-02 duplicate patient surfaces candidates (warn-style)",uat/patients-cases-uat.spec.ts,true,697
+UAT-PAT-03,"UAT-PAT › UAT-PAT-03 edit patient fields persist",uat/patients-cases-uat.spec.ts,true,1691
+UAT-PAT-04,"UAT-PAT › UAT-PAT-04 create treatment case shows label/stage/opened_at",uat/patients-cases-uat.spec.ts,true,1519
+UAT-PAT-05,"UAT-PAT › UAT-PAT-05 delete blocked on in-flight Rx; allowed after delivery",uat/patients-cases-uat.spec.ts,true,3222
+UAT-LAB-01,"UAT-LAB › UAT-LAB-01 inbox shows submitted Rx; drafts hidden; LB sees nothing",uat/rx-lab-uat.spec.ts,true,2376
+UAT-LAB-02,"UAT-LAB › UAT-LAB-02 detail shows patient label, doctor, items, notes",uat/rx-lab-uat.spec.ts,true,1404
+UAT-LAB-03,"UAT-LAB › UAT-LAB-03 download & check-in: real file, ZIP contents verified",uat/rx-lab-uat.spec.ts,true,1601
+UAT-LAB-04,"UAT-LAB › UAT-LAB-04 bundle manifest matches zip entries; attached STL inside",uat/rx-lab-uat.spec.ts,true,1385
+UAT-LAB-05,"UAT-LAB › UAT-LAB-05 repeat download reuses bundle when content unchanged",uat/rx-lab-uat.spec.ts,true,919
+UAT-LAB-06,"UAT-LAB › UAT-LAB-06 lab complete marks production done, practice sees it",uat/rx-lab-uat.spec.ts,true,1866
+UAT-RX-01,"UAT-RX practice › UAT-RX-01 create draft: patient/lab/doctor/location/due/notes",uat/rx-practice-uat.spec.ts,true,2430
+UAT-RX-02,"UAT-RX practice › UAT-RX-02 required option part blocks add until filled",uat/rx-practice-uat.spec.ts,true,855
+UAT-RX-03,"UAT-RX practice › UAT-RX-03 tooth ops persist across draft reopen",uat/rx-practice-uat.spec.ts,true,1646
+UAT-RX-04,"UAT-RX practice › UAT-RX-04 template save/apply; editing new Rx leaves template intact",uat/rx-practice-uat.spec.ts,true,2207
+UAT-RX-05,"UAT-RX practice › UAT-RX-05 attach patient STL to Rx from the web",uat/rx-practice-uat.spec.ts,true,593
+UAT-RX-06,"UAT-RX practice › UAT-RX-06 draft survives logout + fresh login",uat/rx-practice-uat.spec.ts,true,1714
+UAT-RX-07,"UAT-RX practice › UAT-RX-07 submit blocked without items/lab; message readable",uat/rx-practice-uat.spec.ts,true,1358
+UAT-RX-08,"UAT-RX practice › UAT-RX-08 submit records signature + transition",uat/rx-practice-uat.spec.ts,true,1534
+UAT-RX-09,"UAT-RX practice › UAT-RX-09 unsubmit -> draft -> edit -> resubmit",uat/rx-practice-uat.spec.ts,true,1840
+UAT-RX-10,"UAT-RX practice › UAT-RX-10 unsubmit rejected after lab check-in",uat/rx-practice-uat.spec.ts,true,694
+UAT-E-01,"UAT-E UX mechanics › UAT-E-01 primary flows reachable without documentation",uat/ux-regression-uat.spec.ts,true,692
+UAT-E-02,"UAT-E UX mechanics › UAT-E-02 rx create form carries field labels for every control",uat/ux-regression-uat.spec.ts,true,625
+UAT-E-03,"UAT-E UX mechanics › UAT-E-03 rx detail groups content into labelled sections",uat/ux-regression-uat.spec.ts,true,1800
+UAT-E-04,"UAT-E UX mechanics › UAT-E-04 lab inbox is understandable: rx number, patient, status",uat/ux-regression-uat.spec.ts,true,245
+UAT-E-05,"UAT-E UX mechanics › UAT-E-05 mobile 390px: nav usable, no horizontal overflow",uat/ux-regression-uat.spec.ts,true,531

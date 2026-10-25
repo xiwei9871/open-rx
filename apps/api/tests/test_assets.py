@@ -145,6 +145,24 @@ async def test_invalid_stl_rejected(client, s3ok):
     assert r.json()["detail"]["code"] == "invalid_mesh"
 
 
+async def test_truncated_ascii_stl_rejected(client, s3ok):
+    """UAT-ASSET-05: a cut-off ASCII upload carries solid+facet markers but
+    no closing endfacet/endsolid — it must never become format_ok."""
+    await login(client, "staff@pa.dev")
+    content = ASCII_STL.split(b"outer loop")[0]  # ends mid-facet
+    assert b"facet" in content and b"endsolid" not in content
+    r = await _upload(client, content)
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "invalid_mesh"
+
+
+async def test_ascii_stl_still_accepted(client, s3ok):
+    await login(client, "staff@pa.dev")
+    r = await _upload(client, ASCII_STL)
+    assert r.status_code == 202, r.text
+    assert r.json()["format_status"] == "format_ok"
+
+
 async def test_dedup_returns_same_asset(client, s3ok):
     await login(client, "staff@pa.dev")
     content = _binary_stl(5)
@@ -241,6 +259,66 @@ async def test_session_owner_only_and_expired(client, s3ok, admindb):
     await login(client, "staff@pa.dev")
     assert (await client.post(f"/v1/uploads/{sess['id']}/complete",
                               json={"sha256": sha})).status_code == 409
+
+
+async def test_incomplete_put_rejected_and_staging_cleaned(
+        client, s3ok, admindb):
+    """UAT-ASSET-04b: an object-store PUT that never fully landed must not
+    produce an Asset — complete is refused and the staging object is
+    cleaned. Also covers: no-PUT session -> 409, expired session reaped."""
+    from botocore.exceptions import ClientError
+    from sqlalchemy import text
+    await login(client, "staff@pa.dev")
+
+    # Case 1: only HALF the declared bytes reach the staging object.
+    full = _binary_stl(2, tag=uuid.uuid4().bytes)
+    sha = hashlib.sha256(full).hexdigest()
+    r = await client.post("/v1/uploads", json={
+        "sha256": sha, "bytes": len(full), "kind": "stl", "jaw": "na"})
+    assert r.status_code == 201, r.text
+    sess = r.json()
+    assert (await _put_presigned(sess["upload_urls"][0],
+                                 full[: len(full) // 2])) == 200
+    r = await client.post(f"/v1/uploads/{sess['id']}/complete",
+                          json={"sha256": sha})
+    assert r.status_code == 422 and \
+        r.json()["detail"]["code"] == "content_mismatch", r.text
+    # no Asset was created and the partial staging object is gone
+    assert (await admindb.execute(text(
+        "SELECT count(*) FROM asset WHERE sha256 = :s"),
+        {"s": sha})).scalar_one() == 0
+    key = (await admindb.execute(text(
+        "SELECT storage_key FROM upload_session WHERE id = :i"),
+        {"i": sess["id"]})).scalar_one()
+    try:
+        await asyncio.to_thread(
+            s3().head_object, Bucket=_s.s3_bucket, Key=key)
+        raise AssertionError("partial staging object was not deleted")
+    except ClientError as e:
+        assert e.response["Error"]["Code"] in ("404", "NoSuchKey")
+
+    # Case 2: session declared but PUT never happens -> complete 409.
+    r = await client.post("/v1/uploads", json={
+        "sha256": hashlib.sha256(b"never-landed").hexdigest(),
+        "bytes": 12, "kind": "stl", "jaw": "na"})
+    sess2 = r.json()
+    r = await client.post(f"/v1/uploads/{sess2['id']}/complete", json={
+        "sha256": hashlib.sha256(b"never-landed").hexdigest()})
+    assert r.status_code == 409, r.text
+
+    # Case 3: expiry -> opportunistic reaper marks it and drops staging.
+    await admindb.execute(text(
+        "UPDATE upload_session SET expires_at = now() - interval '1s' "
+        "WHERE id = :i"), {"i": sess2["id"]})
+    await admindb.commit()
+    # any new declare runs the reaper inside the caller's transaction
+    r = await client.post("/v1/uploads", json={
+        "sha256": hashlib.sha256(b"trigger").hexdigest(),
+        "bytes": 7, "kind": "stl", "jaw": "na"})
+    assert r.status_code == 201, r.text
+    assert (await admindb.execute(text(
+        "SELECT status FROM upload_session WHERE id = :i"),
+        {"i": sess2["id"]})).scalar_one() == "expired"
 
 
 # ---- S1a1-01: namespaced storage keys --------------------------------------

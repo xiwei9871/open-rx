@@ -1,0 +1,11 @@
+id,severity,area,title,status,evidence,detail
+F-01,P0,rx-create,Patient->Case->Rx loop broken in web UI,FIXED,"UAT-RX-01/05, JOURNEY","No case selector and no way to attach patient files to an Rx in the web; API supported both. Minimal UI added on this branch."
+F-02,P1,rx-create,Patients beyond first API page unreachable,FIXED,UAT-RX-01,"RxCreate loaded only the first 25 patients with no search. Added type-ahead filter bound to searchPatients."
+F-03,P1,assets,Truncated ASCII STL accepted as format_ok,FIXED,"UAT-ASSET-05, test_assets.py","Validation only checked solid+facet prefixes; now requires endfacet+endsolid. Backend regression added."
+F-04,P1,tests,2FA browser specs non-idempotent,FIXED,"UAT-AUTH-04, auth.spec","Specs enrolled TOTP onto shared doctor@pa.dev; rerun always failed. Replaced with seeded mfa@pa.dev fixed synthetic secret."
+F-05,P2,lists,No pagination UI on patient/Rx/inbox lists,OPEN,UAT-FULFILL-05,"First API page only; search/filters mitigate. Needs cursor controls before multi-hundred-record clinics."
+F-06,P2,rx-create,Tooth entry is a numbered grid not an FDI chart,OPEN,UAT-RX-03,"Works and persists, but below EasyRx charting ergonomics."
+F-07,P2,files,Non-STL attachment paths unverified,OPEN,UAT-RX-05,"Upload/attach accept arbitrary files; only STL bundle path was verified end-to-end."
+F-08,P2,bundle,Rendering-field change -> new bundle not browser-verified,OPEN,UAT-LAB-05,"Reuse on unchanged content verified; change-detection exists in code but a patient-name-style change was not re-verified."
+F-09,P3,ux,No saved views/tags/localisation,OPEN,scorecard,"EasyRx parity extras deferred."
+F-10,P3,ops,Dev database carried pre-idempotency UAT-P03B duplicates,OPEN,dataset.ts,"ensureDataset keys on external_ref so tests are unaffected; clean via fresh seed if desired."

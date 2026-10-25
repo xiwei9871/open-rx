@@ -87,7 +87,7 @@ test("lab sees patient label on received rx detail", async ({ page }) => {
   const row = page.locator("table.data tbody tr").first();
   await expect(row).toContainText(/RX\d+/);
   await row.click();
-  await expect(page.locator("table.kv"))
+  await expect(page.locator("table.kv").first())
     .toContainText(/P\d{6} —/);
 });
 

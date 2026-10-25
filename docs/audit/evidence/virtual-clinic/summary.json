@@ -1,0 +1,405 @@
+{
+  "base_url": "http://localhost:5173",
+  "generated_at": "2026-10-25T12:05:26.841Z",
+  "verdict": "PASS",
+  "expected": 49,
+  "executed": 49,
+  "passed": 49,
+  "failed_ids": [],
+  "missing_ids": [],
+  "suite_error": null,
+  "cases": [
+    {
+      "id": "UAT-ASSET-01",
+      "title": "UAT-ASSET › UAT-ASSET-01 upload upper+lower STL to a patient; bytes/sha/format shown",
+      "file": "uat/assets-stl-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 3297
+    },
+    {
+      "id": "UAT-ASSET-02",
+      "title": "UAT-ASSET › UAT-ASSET-02 STL preview: orbit/zoom/reset produce real pixels",
+      "file": "uat/assets-stl-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 6487
+    },
+    {
+      "id": "UAT-ASSET-03",
+      "title": "UAT-ASSET › UAT-ASSET-03 patient STL download is non-empty and hash-verified",
+      "file": "uat/assets-stl-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1724
+    },
+    {
+      "id": "UAT-ASSET-04",
+      "title": "UAT-ASSET › UAT-ASSET-04 interrupted upload leaves no half-baked asset",
+      "file": "uat/assets-stl-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1725
+    },
+    {
+      "id": "UAT-ASSET-05",
+      "title": "UAT-ASSET › UAT-ASSET-05 broken STL is rejected or never format_ok",
+      "file": "uat/assets-stl-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 4601
+    },
+    {
+      "id": "UAT-ASSET-06",
+      "title": "UAT-ASSET › UAT-ASSET-06 unconnected lab cannot reach patient assets",
+      "file": "uat/assets-stl-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 359
+    },
+    {
+      "id": "UAT-AUTH-01",
+      "title": "UAT-AUTH › UAT-AUTH-01 login lands on home, cookies set, me() identity",
+      "file": "uat/auth-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1215
+    },
+    {
+      "id": "UAT-AUTH-02",
+      "title": "UAT-AUTH › UAT-AUTH-02 logout clears both cookies; no revive; deep-link denied",
+      "file": "uat/auth-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 773
+    },
+    {
+      "id": "UAT-AUTH-03",
+      "title": "UAT-AUTH › UAT-AUTH-03 refresh keeps patient + rx-detail context",
+      "file": "uat/auth-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1290
+    },
+    {
+      "id": "UAT-AUTH-04",
+      "title": "UAT-AUTH › UAT-AUTH-04 2FA challenge rejects wrong code, accepts right code",
+      "file": "uat/auth-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 826
+    },
+    {
+      "id": "UAT-COLLAB-01",
+      "title": "UAT-COLLAB › UAT-COLLAB-01 two-way comments persist after reload",
+      "file": "uat/collaboration-approval-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 4941
+    },
+    {
+      "id": "UAT-COLLAB-02",
+      "title": "UAT-COLLAB › UAT-COLLAB-02 comment anchored to an attachment tracks the file",
+      "file": "uat/collaboration-approval-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1645
+    },
+    {
+      "id": "UAT-COLLAB-03",
+      "title": "UAT-COLLAB › UAT-COLLAB-03 lab notification reaches practice inbox, mark read",
+      "file": "uat/collaboration-approval-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1559
+    },
+    {
+      "id": "UAT-COLLAB-04",
+      "title": "UAT-COLLAB › UAT-COLLAB-04 approval request -> approve bound to rx version",
+      "file": "uat/collaboration-approval-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 2109
+    },
+    {
+      "id": "UAT-COLLAB-05",
+      "title": "UAT-COLLAB › UAT-COLLAB-05 version drift: editing Rx after approval request must not silently approve old version",
+      "file": "uat/collaboration-approval-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 797
+    },
+    {
+      "id": "UAT-FULFILL-01",
+      "title": "UAT-FULFILL › UAT-FULFILL-01..04 QC->ship->receive->deliver full loop on web",
+      "file": "uat/fulfillment-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 3465
+    },
+    {
+      "id": "UAT-FULFILL-05",
+      "title": "UAT-FULFILL › UAT-FULFILL-05 dashboard + status filters show lifecycle states",
+      "file": "uat/fulfillment-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 578
+    },
+    {
+      "id": "UAT-JOURNEY",
+      "title": "UAT-JOURNEY › full clinic loop: P05 retainer from intake to delivery",
+      "file": "uat/journey-full-clinic-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 7261
+    },
+    {
+      "id": "UAT-NEG-01",
+      "title": "UAT-NEG › UAT-NEG-01 unconnected-lab deep link leaks nothing",
+      "file": "uat/negative-guardrails-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 2077
+    },
+    {
+      "id": "UAT-NEG-02",
+      "title": "UAT-NEG › UAT-NEG-02 practice cannot run lab-only actions",
+      "file": "uat/negative-guardrails-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 977
+    },
+    {
+      "id": "UAT-NEG-03",
+      "title": "UAT-NEG › UAT-NEG-03 double-clicks create no duplicate side effects",
+      "file": "uat/negative-guardrails-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 4263
+    },
+    {
+      "id": "UAT-NEG-04",
+      "title": "UAT-NEG › UAT-NEG-04 API outage surfaces an explicit error, never silent",
+      "file": "uat/negative-guardrails-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 620
+    },
+    {
+      "id": "UAT-NEG-05",
+      "title": "UAT-NEG › UAT-NEG-05 back/forward honours URL routing",
+      "file": "uat/negative-guardrails-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 659
+    },
+    {
+      "id": "UAT-PAT-01",
+      "title": "UAT-PAT › UAT-PAT-01 create patient via web; required fields; list + detail",
+      "file": "uat/patients-cases-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1375
+    },
+    {
+      "id": "UAT-PAT-02",
+      "title": "UAT-PAT › UAT-PAT-02 duplicate patient surfaces candidates (warn-style)",
+      "file": "uat/patients-cases-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 697
+    },
+    {
+      "id": "UAT-PAT-03",
+      "title": "UAT-PAT › UAT-PAT-03 edit patient fields persist",
+      "file": "uat/patients-cases-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1691
+    },
+    {
+      "id": "UAT-PAT-04",
+      "title": "UAT-PAT › UAT-PAT-04 create treatment case shows label/stage/opened_at",
+      "file": "uat/patients-cases-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1519
+    },
+    {
+      "id": "UAT-PAT-05",
+      "title": "UAT-PAT › UAT-PAT-05 delete blocked on in-flight Rx; allowed after delivery",
+      "file": "uat/patients-cases-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 3222
+    },
+    {
+      "id": "UAT-LAB-01",
+      "title": "UAT-LAB › UAT-LAB-01 inbox shows submitted Rx; drafts hidden; LB sees nothing",
+      "file": "uat/rx-lab-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 2376
+    },
+    {
+      "id": "UAT-LAB-02",
+      "title": "UAT-LAB › UAT-LAB-02 detail shows patient label, doctor, items, notes",
+      "file": "uat/rx-lab-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1404
+    },
+    {
+      "id": "UAT-LAB-03",
+      "title": "UAT-LAB › UAT-LAB-03 download & check-in: real file, ZIP contents verified",
+      "file": "uat/rx-lab-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1601
+    },
+    {
+      "id": "UAT-LAB-04",
+      "title": "UAT-LAB › UAT-LAB-04 bundle manifest matches zip entries; attached STL inside",
+      "file": "uat/rx-lab-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1385
+    },
+    {
+      "id": "UAT-LAB-05",
+      "title": "UAT-LAB › UAT-LAB-05 repeat download reuses bundle when content unchanged",
+      "file": "uat/rx-lab-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 919
+    },
+    {
+      "id": "UAT-LAB-06",
+      "title": "UAT-LAB › UAT-LAB-06 lab complete marks production done, practice sees it",
+      "file": "uat/rx-lab-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1866
+    },
+    {
+      "id": "UAT-RX-01",
+      "title": "UAT-RX practice › UAT-RX-01 create draft: patient/lab/doctor/location/due/notes",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 2430
+    },
+    {
+      "id": "UAT-RX-02",
+      "title": "UAT-RX practice › UAT-RX-02 required option part blocks add until filled",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 855
+    },
+    {
+      "id": "UAT-RX-03",
+      "title": "UAT-RX practice › UAT-RX-03 tooth ops persist across draft reopen",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1646
+    },
+    {
+      "id": "UAT-RX-04",
+      "title": "UAT-RX practice › UAT-RX-04 template save/apply; editing new Rx leaves template intact",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 2207
+    },
+    {
+      "id": "UAT-RX-05",
+      "title": "UAT-RX practice › UAT-RX-05 attach patient STL to Rx from the web",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 593
+    },
+    {
+      "id": "UAT-RX-06",
+      "title": "UAT-RX practice › UAT-RX-06 draft survives logout + fresh login",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1714
+    },
+    {
+      "id": "UAT-RX-07",
+      "title": "UAT-RX practice › UAT-RX-07 submit blocked without items/lab; message readable",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1358
+    },
+    {
+      "id": "UAT-RX-08",
+      "title": "UAT-RX practice › UAT-RX-08 submit records signature + transition",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1534
+    },
+    {
+      "id": "UAT-RX-09",
+      "title": "UAT-RX practice › UAT-RX-09 unsubmit -> draft -> edit -> resubmit",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1840
+    },
+    {
+      "id": "UAT-RX-10",
+      "title": "UAT-RX practice › UAT-RX-10 unsubmit rejected after lab check-in",
+      "file": "uat/rx-practice-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 694
+    },
+    {
+      "id": "UAT-E-01",
+      "title": "UAT-E UX mechanics › UAT-E-01 primary flows reachable without documentation",
+      "file": "uat/ux-regression-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 692
+    },
+    {
+      "id": "UAT-E-02",
+      "title": "UAT-E UX mechanics › UAT-E-02 rx create form carries field labels for every control",
+      "file": "uat/ux-regression-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 625
+    },
+    {
+      "id": "UAT-E-03",
+      "title": "UAT-E UX mechanics › UAT-E-03 rx detail groups content into labelled sections",
+      "file": "uat/ux-regression-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 1800
+    },
+    {
+      "id": "UAT-E-04",
+      "title": "UAT-E UX mechanics › UAT-E-04 lab inbox is understandable: rx number, patient, status",
+      "file": "uat/ux-regression-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 245
+    },
+    {
+      "id": "UAT-E-05",
+      "title": "UAT-E UX mechanics › UAT-E-05 mobile 390px: nav usable, no horizontal overflow",
+      "file": "uat/ux-regression-uat.spec.ts",
+      "ok": true,
+      "ran": true,
+      "duration_ms": 531
+    }
+  ]
+}

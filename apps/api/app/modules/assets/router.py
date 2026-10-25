@@ -41,13 +41,16 @@ def _asset_join_out(ref: FileReference, asset: Asset) -> dict:
 
 
 def _validate_stl(content: bytes) -> bool:
-    """Minimal mesh sanity (ASSET-008): binary layout or ASCII markers."""
+    """Minimal mesh sanity (ASSET-008): binary layout or complete ASCII
+    markers. A truncated upload (solid+facet present but no closing
+    endfacet/endsolid) must NOT pass as format_ok."""
     if len(content) >= 84:
         n = int.from_bytes(content[80:84], "little")
         if 84 + 50 * n == len(content):
             return True
     head = content.lstrip()[:5].lower()
-    return head == b"solid" and b"facet" in content[:8192]
+    return (head == b"solid" and b"facet" in content[:8192]
+            and b"endfacet" in content and b"endsolid" in content)
 
 
 _EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"

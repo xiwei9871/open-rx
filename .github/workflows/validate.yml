@@ -275,6 +275,28 @@ jobs:
           if AUDIT_INJECT=1 node tests/audit/run-audit.mjs --quick --out audit-inject; then
             echo "audit gate failed to detect injected console error"; exit 1;
           fi
+      # Gate self-check first (injection writes a synthetic FAIL summary —
+      # the real run below overwrites it before artifacts upload).
+      - name: Clinic-audit gate self-test + failure injection
+        run: |
+          cd apps/web
+          node tests/e2e/uat/run-clinic-audit.mjs --self-test
+          if node tests/e2e/uat/run-clinic-audit.mjs --inject-failure; then
+            echo "clinic audit failed to detect injected failure"; exit 1;
+          fi
+      # Virtual-clinic UAT aggregator — hard gate: FAIL verdict, missing
+      # expected cases, or a spec that never ran all exit non-zero AFTER
+      # evidence is written.
+      - name: Virtual-clinic UAT gate
+        run: |
+          cd apps/web
+          node tests/e2e/uat/run-clinic-audit.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: virtual-clinic-evidence
+          path: docs/audit/evidence/virtual-clinic/
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:

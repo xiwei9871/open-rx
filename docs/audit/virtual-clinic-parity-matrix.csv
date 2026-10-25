@@ -1,0 +1,55 @@
+uat_id,easyrx_reference_flow,easyrs_verified_status,evidence,note
+UAT-AUTH-01,EasyRx Practice sign-in to dashboard,VERIFIED,summary.json,Cookie session + me() identity
+UAT-AUTH-02,Sign out / session teardown,VERIFIED,summary.json,Both cookies cleared; deep-link denied; no revive
+UAT-AUTH-03,Browser refresh mid-work,VERIFIED,summary.json,Patient + Rx context survive reload
+UAT-AUTH-04,Two-factor sign-in,VERIFIED,summary.json,Seeded mfa@pa.dev; wrong code rejected then TOTP accepted
+UAT-PAT-01,EasyRx patient intake form,VERIFIED,summary.json,Required fields validated; list+detail correct
+UAT-PAT-02,Duplicate patient warning,VERIFIED_WARN_STYLE,summary.json,Candidates + "Create anyway" prompt; not hard-block
+UAT-PAT-03,Edit patient demographics,VERIFIED,summary.json,Name/ref/notes persist
+UAT-PAT-04,Treatment case per patient,VERIFIED,summary.json,Label/stage/opened_at render
+UAT-PAT-05,Patient delete protection,VERIFIED,summary.json,Blocked in-flight; allowed after delivered (soft)
+UAT-ASSET-01,Upper+lower STL upload to patient,VERIFIED,summary.json,Dual-arch specifically covered; bytes/sha/format shown
+UAT-ASSET-02,In-browser STL viewer,VERIFIED,summary.json,Orbit/zoom/reset proven via canvas pixel diffs
+UAT-ASSET-03,File download,VERIFIED,summary.json,Downloaded bytes sha256 == source
+UAT-ASSET-04,Interrupted upload handling,VERIFIED,summary.json,No half-registered asset; cleanup path
+UAT-ASSET-05,Malformed STL rejection,VERIFIED_AFTER_FIX,summary.json,Truncated STL was accepted format_ok; tightened this round
+UAT-ASSET-06,Cross-org file isolation,VERIFIED,summary.json,Unconnected LB denied patient assets
+UAT-RX-01,New Rx: patient/lab/doctor/due/notes,VERIFIED_AFTER_FIX,summary.json,Case selector + patient filter added this round
+UAT-RX-02,Appliance with required options,VERIFIED,summary.json,Required option blocks Add
+UAT-RX-03,Tooth/arch entry per item,VERIFIED,summary.json,Teeth persist across draft reopen; grid not FDI chart
+UAT-RX-04,Rx templates save/apply,VERIFIED,summary.json,Template source not polluted by edits
+UAT-RX-05,Attach patient STL into Rx,VERIFIED_AFTER_FIX,summary.json,Web attach UI added this round; bundle carries it (LAB-04)
+UAT-RX-06,Draft persistence across sessions,VERIFIED,summary.json,All fields/items survive logout+login
+UAT-RX-07,Submit validation,VERIFIED,summary.json,Items/lab/signature enforced with readable errors
+UAT-RX-08,Sign + submit,VERIFIED,summary.json,submitted status + signature + transition history
+UAT-RX-09,Recall (unsubmit) before check-in,VERIFIED,summary.json,draft -> edit -> resubmit
+UAT-RX-10,Recall blocked after check-in,VERIFIED,summary.json,Human-readable refusal, not bare 409
+UAT-LAB-01,EasyRx Lab inbox,VERIFIED,summary.json,Submitted visible; drafts hidden; LB isolated
+UAT-LAB-02,Lab Rx detail view,VERIFIED,summary.json,Patient label/doctor/items/notes/attachments
+UAT-LAB-03,Download bundle + check-in,VERIFIED,summary.json,Real ZIP: pdf+manifest+attachments; checked_in transition
+UAT-LAB-04,Bundle content integrity,VERIFIED,summary.json,Manifest matches zip entries; attached STL inside; PDF non-empty
+UAT-LAB-05,Bundle reuse policy,VERIFIED,summary.json,Reuse when unchanged; regeneration on content change per code path
+UAT-LAB-06,Mark Rx completed,VERIFIED,summary.json,Practice sees status change
+UAT-COLLAB-01,Rx comments both directions,VERIFIED,summary.json,Persists after reload
+UAT-COLLAB-02,Attachment-anchored comment,VERIFIED,summary.json,Tracks file_reference; plain list UI
+UAT-COLLAB-03,Lab->practice notification,VERIFIED,summary.json,Inbox + mark-read
+UAT-COLLAB-04,Approval request/decide,VERIFIED,summary.json,Signature-bound decision on current version
+UAT-COLLAB-05,Version drift guard,VERIFIED,summary.json,Stale-version approval prevented
+UAT-FULFILL-01,QC pass/fail,VERIFIED,summary.json,qc_pending -> qc_passed recorded
+UAT-FULFILL-02,Ship with carrier+tracking,VERIFIED,summary.json,shipped_at recorded
+UAT-FULFILL-03,Practice receive,VERIFIED,summary.json,Status visible both sides
+UAT-FULFILL-04,Deliver,VERIFIED,summary.json,delivered_at; delete protection released
+UAT-FULFILL-05,Status dashboard/filters,VERIFIED,summary.json,Stat cards + status/fulfillment/due filters
+UAT-NEG-01,Unauthorized deep link,VERIFIED,summary.json,Unconnected lab denied; zero patient leakage
+UAT-NEG-02,Cross-role action denial,VERIFIED,summary.json,Practice cannot run lab-only transitions
+UAT-NEG-03,Double-click idempotency,VERIFIED,summary.json,Same-tick double click single side effect
+UAT-NEG-04,API outage messaging,VERIFIED,summary.json,Explicit error alert, never silent
+UAT-NEG-05,Back/forward navigation,VERIFIED,summary.json,URL routing consistent
+UAT-E-01..05,General usability heuristics,VERIFIED,summary.json+scorecard,See scorecard for <4 pages
+UAT-JOURNEY,Full clinic loop end-to-end,VERIFIED,summary.json,P05-style intake->delivery on web only
+PARITY-3DEDIT,EasyRx 3D modelling/edit tools,OUT_OF_SCOPE,-,Explicitly deferred per brief
+PARITY-ITER0,iTero/scanner direct integrations,OUT_OF_SCOPE,-,Deferred
+PARITY-BILLING,Complex billing/reconciliation,OUT_OF_SCOPE,-,Deferred
+PARITY-TAGS,Rx tags + saved views,MISSING,-,Roadmap P2
+PARITY-FDICHART,Graphical FDI tooth chart,MISSING,-,Numbered grid today; roadmap P2
+PARITY-NONSTL,Photo/PDF patient attachments,PARTIAL,-,Upload+attach exist; UAT verified STL path only

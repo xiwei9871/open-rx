@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createRx, createRxTemplate, listCatalog, listConnections,
-  listLocations, listRoster, listRxTemplates, orgs, replaceRxItems,
-  searchPatients, type CatalogItem, type Location, type Me, type Patient,
-  type RxTemplate,
+  createRx, createRxTemplate, getPatient, listCases, listCatalog,
+  listConnections, listLocations, listRoster, listRxTemplates, orgs,
+  replaceRxItems, searchPatients, type Case, type CatalogItem,
+  type Location, type Me, type Patient, type RxTemplate,
 } from "../api";
 
 type ToothOp = { tooth: string; op: string; detail?: string | null };
@@ -67,18 +67,22 @@ function ToothPicker({ arch, ops, onChange }: {
   );
 }
 
-export default function RxCreate({ me, onCreated, onCancel }: {
+export default function RxCreate({ me, onCreated, onCancel, initialPatientId }: {
   me: Me;
   onCreated: (id: string) => void;
   onCancel: () => void;
+  initialPatientId?: string;
 }) {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientQ, setPatientQ] = useState("");
   const [labs, setLabs] = useState<{ id: string; name: string }[]>([]);
   const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [templates, setTemplates] = useState<RxTemplate[]>([]);
-  const [patientId, setPatientId] = useState("");
+  const [patientId, setPatientId] = useState(initialPatientId ?? "");
+  const [cases, setCases] = useState<Case[]>([]);
+  const [caseId, setCaseId] = useState("");
   const [labId, setLabId] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -98,10 +102,43 @@ export default function RxCreate({ me, onCreated, onCancel }: {
   const picked = catalog.find((i) => i.id === pick);
   const pickedRequired = requiredOptions(picked);
 
+  // Load the patient's treatment cases whenever the patient changes.
+  useEffect(() => {
+    setCaseId("");
+    if (!patientId) { setCases([]); return; }
+    listCases(patientId).then(setCases).catch(() => setCases([]));
+  }, [patientId]);
+
+  // The patient picker must not silently truncate at the first page:
+  // debounce a server-side name/ref search so any patient is reachable.
+  useEffect(() => {
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const list = await searchPatients(patientQ.trim() || undefined);
+        if (!live) return;
+        setPatients((prev) => {
+          const sel = prev.find((p) => p.id === patientId);
+          return sel && !list.some((p) => p.id === sel.id)
+            ? [sel, ...list] : list;
+        });
+      } catch { /* keep the last good list */ }
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [patientQ]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefilled patient (patient-detail "New Rx") may be outside page one —
+  // fetch it by id so the option always exists.
+  useEffect(() => {
+    if (!initialPatientId) return;
+    getPatient(initialPatientId).then((p) =>
+      setPatients((prev) => prev.some((x) => x.id === p.id)
+        ? prev : [p, ...prev])).catch(() => {});
+  }, [initialPatientId]);
+
   useEffect(() => {
     (async () => {
       try {
-        setPatients(await searchPatients());
         if (me.org_id) {
           const [conns, allOrgs, roster, locs, tmpls] = await Promise.all([
             listConnections(me.org_id), orgs(), listRoster(me.org_id),
@@ -205,6 +242,7 @@ export default function RxCreate({ me, onCreated, onCancel }: {
         lab_org_id: labId || null,
         doctor_id: doctorId || null,
         location_id: locationId || null,
+        case_id: caseId || null,
         due_date: dueDate || null,
         notes: notes || null,
       });
@@ -228,6 +266,12 @@ export default function RxCreate({ me, onCreated, onCancel }: {
         <div className="card">
           <h3>Order details</h3>
           <div className="grid2">
+            <label className="field"><span>Filter</span>
+              <input name="patient_filter"
+                     placeholder="Type a name or ref…"
+                     value={patientQ}
+                     onChange={(e) => setPatientQ(e.target.value)} />
+            </label>
             <label className="field"><span>Patient</span>
               <select name="patient" required value={patientId}
                       onChange={(e) => setPatientId(e.target.value)}>
@@ -239,6 +283,21 @@ export default function RxCreate({ me, onCreated, onCancel }: {
                 ))}
               </select>
             </label>
+            {patientId && (
+              <label className="field"><span>Treatment case</span>
+                <select name="case" value={caseId}
+                        onChange={(e) => setCaseId(e.target.value)}>
+                  <option value="">
+                    {cases.length === 0 ? "— no cases on file —"
+                     : "— select case —"}
+                  </option>
+                  {cases.map((c) =>
+                    <option key={c.id} value={c.id}>
+                      {c.label ?? `case ${c.id.slice(0, 8)}…`} ({c.stage})
+                    </option>)}
+                </select>
+              </label>
+            )}
             <label className="field"><span>Laboratory</span>
               <select name="lab" value={labId}
                       onChange={(e) => setLabId(e.target.value)}>
