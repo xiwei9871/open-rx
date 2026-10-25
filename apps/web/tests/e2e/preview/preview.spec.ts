@@ -205,8 +205,9 @@ test.describe("preview: lab journey", () => {
     await page.getByLabel("Carrier").fill("Canada Post");
     await page.getByLabel("Tracking number").fill(`PV-${Date.now() % 1e6}`);
     await page.getByRole("button", { name: "Ship" }).click();
-    await expect(page.getByRole("status")).toContainText(/Ship/i,
-      { timeout: 15000 });
+    await expect(page.getByRole("cell", { name: "Shipped" })
+      .or(page.getByText(/^Shipped$/)))
+      .toBeVisible({ timeout: 15000 });
   });
 });
 
@@ -220,11 +221,13 @@ test.describe("preview: practice fulfillment", () => {
     await expect(page.getByRole("heading", { name: /— Completed/ }))
       .toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "Confirm receipt" }).click();
-    await expect(page.getByRole("status")).toContainText(/Received/i,
-      { timeout: 15000 });
+    await expect(page.getByRole("cell", { name: "Received" }).first()
+      .or(page.getByText(/^Received$/)))
+      .toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "Confirm delivery" }).click();
-    await expect(page.getByRole("status")).toContainText(/Delivered/i,
-      { timeout: 15000 });
+    await expect(page.getByRole("cell", { name: "Delivered" }).first()
+      .or(page.getByText(/^Delivered$/)))
+      .toBeVisible({ timeout: 15000 });
     // transition + fulfillment trail visible
     await expect(page.getByText(/Submitted → Checked-In/)).toBeVisible();
     await signOut(page);
