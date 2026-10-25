@@ -210,8 +210,8 @@ async def seed_demo(slug: str, practice_name: str, lab_name: str,
             if not (await db.execute(select(CatalogItem).where(
                     CatalogItem.tenant_id == tenant.id,
                     CatalogItem.code == code,
-                    CatalogItem.owner_org_id.is_(None))
-            ).scalar_one_or_none()):
+                    CatalogItem.owner_org_id.is_(None)
+            ))).scalar_one_or_none():
                 db.add(CatalogItem(
                     tenant_id=tenant.id, owner_org_id=None, kind=kind,
                     code=code, name=name, category=cat,
