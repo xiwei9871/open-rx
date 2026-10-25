@@ -32,6 +32,11 @@ class Organization(Base, IdMixin, CreatedAtMixin):
     status: Mapped[str] = mapped_column(
         Enum("active", "suspended", name="org_status"), default="active"
     )
+    # M1 org defaults — Rx create prefill (IAM-001/003/010).
+    default_doctor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("roster_member.id"), nullable=True)
+    default_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("location.id"), nullable=True)
 
 
 class Location(Base, IdMixin, CreatedAtMixin):

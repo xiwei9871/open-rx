@@ -68,10 +68,19 @@ test.describe("patient workbench", () => {
       await page.getByLabel("Date of birth").fill("2001-01-01");
       await page.getByRole("button", { name: "Create patient" }).click();
       if (first === "AA") {
-        // navigates to detail — go back to list
+        // Wait for create to finish and land on the patient detail —
+        // under load the POST is slow; without this the list re-fill below
+        // races an in-flight submit (busy-disabled button) and the nav
+        // away detaches the form mid-click.
+        await expect(page).toHaveURL(/\/patients\/.+/, { timeout: 15000 });
+        // navigates to detail — go back to list and wait for the route change
+        // (the detail's Edit form also has First/Last name fields)
         await page.getByRole("button", { name: "Patients" }).click();
+        await expect(page).toHaveURL(/\/patients$/);
+        await expect(page.getByLabel("Search")).toBeVisible();
       } else {
-        await expect(page.getByText("Possible duplicate patients")).toBeVisible();
+        await expect(page.getByText("Possible duplicate patients"))
+          .toBeVisible({ timeout: 15000 });
         await page.getByRole("button", { name: "Create anyway" }).click();
         await expect(page.getByRole("heading", { name: new RegExp(`${tag}, BB`) }))
           .toBeVisible();

@@ -1,14 +1,11 @@
-import { useEffect, useState } from "react";
-import { checkInRx, listRx, type Me, type Rx } from "../api";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Saved", submitted: "Submitted", checked_in: "Checked-In",
-  in_progress: "In Progress", on_hold: "On Hold", completed: "Completed",
-  reopened: "Reopened", cancelled: "Cancelled",
-};
-
-const th = { textAlign: "left" as const, padding: "4px 10px 4px 0" };
-const td = { padding: "4px 10px 4px 0" };
+import { useCallback, useEffect, useState } from "react";
+import {
+  checkInRx, getDashboard, listRx, type Dashboard, type Me, type Rx,
+} from "../api";
+import {
+  fmtDate, fulfillmentLabel, FULFILLMENT_LABELS, statusLabel,
+  STATUS_LABELS,
+} from "../lib";
 
 export default function RxList({ me, onOpen, onNew }: {
   me: Me;
@@ -18,41 +15,80 @@ export default function RxList({ me, onOpen, onNew }: {
   const isLab = me.org_kind === "lab";
   const [items, setItems] = useState<Rx[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [dash, setDash] = useState<Dashboard | null>(null);
   const [filter, setFilter] = useState("");
+  const [fulFilter, setFulFilter] = useState("");
+  const [dueBefore, setDueBefore] = useState("");
   const [err, setErr] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function reload(status?: string) {
+  const reload = useCallback(async () => {
     setErr("");
     try {
-      const r = await listRx(status || undefined);
+      const r = await listRx(filter || undefined, {
+        fulfillmentStatus: fulFilter || undefined,
+        dueBefore: dueBefore || undefined,
+      });
       setItems(r.items);
       setCounts(r.counts);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     }
-  }
-  useEffect(() => { void reload(filter); }, [filter]);
+  }, [filter, fulFilter, dueBefore]);
+  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => { getDashboard().then(setDash).catch(() => {}); }, []);
 
   async function onCheckIn(e: React.MouseEvent, id: string, version: number) {
     e.stopPropagation();
-    setErr("");
+    if (busyId) return;
+    setErr(""); setBusyId(id);
     try {
       await checkInRx(id, version);
-      await reload(filter);
+      await reload();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
+    } finally {
+      setBusyId(null);
     }
   }
 
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
   return (
     <section>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+      <div className="page-head">
         <h2>{isLab ? "Received Prescriptions" : "Prescriptions"}</h2>
         {!isLab && me.permissions.includes("rx:write") && (
-          <button onClick={onNew}>New Rx</button>
+          <button className="primary" onClick={onNew}>New Rx</button>
         )}
-      </header>
-      <p>
+      </div>
+      <div className="stats" data-testid="dashboard">
+        <div className="stat">
+          <div className="n">{total}</div>
+          <div className="l">Total shown</div>
+        </div>
+        {Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => (
+          <div className="stat" key={k}>
+            <div className="n">{n}</div>
+            <div className="l">{statusLabel(k)}</div>
+          </div>
+        ))}
+        {dash && Object.entries(dash.by_fulfillment)
+          .filter(([k, n]) => k !== "none" && n > 0)
+          .map(([k, n]) => (
+            <div className="stat" key={k}>
+              <div className="n">{n}</div>
+              <div className="l">{fulfillmentLabel(k)}</div>
+            </div>
+          ))}
+        {dash && dash.due_soon.length > 0 && (
+          <div className="stat warn" data-testid="due-soon" role="status">
+            <div className="n">{dash.due_soon.length}</div>
+            <div className="l">Due soon ({dash.due_soon_hours}h)</div>
+          </div>
+        )}
+      </div>
+      <div className="toolbar">
         <label>Status{" "}
           <select value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">All</option>
@@ -60,47 +96,78 @@ export default function RxList({ me, onOpen, onNew }: {
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
-        </label>{" "}
-        {Object.entries(counts).map(([k, n]) => (
-          <span key={k} style={{ marginRight: 8, fontSize: 12, color: "#555" }}>
-            {STATUS_LABELS[k] ?? k}: {n}
-          </span>
-        ))}
-      </p>
-      {err && <p role="alert" style={{ color: "crimson" }}>{err}</p>}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        </label>
+        <label>Fulfillment{" "}
+          <select value={fulFilter}
+                  onChange={(e) => setFulFilter(e.target.value)}>
+            <option value="">All</option>
+            {Object.entries(FULFILLMENT_LABELS)
+              .filter(([v]) => v !== "none")
+              .map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+          </select>
+        </label>
+        <label>Due before{" "}
+          <input type="date" value={dueBefore}
+                 onChange={(e) => setDueBefore(e.target.value)} />
+        </label>
+      </div>
+      {err && <p role="alert" className="alert">{err}</p>}
+      <div className="card" style={{ padding: 0 }}>
+      <div className="table-wrap">
+      <table className="data">
         <thead>
           <tr>
-            <th style={th}>Rx #</th><th style={th}>Status</th>
-            <th style={th}>Due</th><th style={th}>Created</th>
-            {isLab && <th style={th}>Action</th>}
+            <th>Rx #</th><th>Patient</th>
+            <th className="hide-sm">{isLab ? "Practice" : "Lab"}</th>
+            <th>Status</th><th className="hide-sm">Fulfillment</th>
+            <th>Due</th><th className="hide-sm">Created</th>
+            {isLab && <th>Action</th>}
           </tr>
         </thead>
         <tbody>
           {items.map((r) => (
-            <tr key={r.id} onClick={() => onOpen(r.id)}
-                style={{ cursor: "pointer", borderTop: "1px solid #ddd" }}>
-              <td style={td}>{r.rx_number}</td>
-              <td style={td}>
-                {STATUS_LABELS[r.status] ?? r.status}
-                {r.checked_in_via === "download" && " (via download)"}
+            <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
+              <td><strong>{r.rx_number}</strong></td>
+              <td>{r.patient_label ?? r.patient_id.slice(0, 8) + "…"}</td>
+              <td className="hide-sm">
+                {(isLab ? r.practice_name : r.lab_name) ?? "—"}</td>
+              <td>
+                <span className={`pill st-${r.status}`}>
+                  {statusLabel(r.status)}
+                </span>
+                {r.checked_in_via === "download" &&
+                  <small className="muted"> (dl)</small>}
               </td>
-              <td style={td}>{r.due_date ?? "—"}</td>
-              <td style={td}>{r.created_at.slice(0, 10)}</td>
+              <td className="hide-sm">
+                {r.fulfillment_status !== "none" ? (
+                  <span className={`pill st-${r.fulfillment_status}`}>
+                    {fulfillmentLabel(r.fulfillment_status)}
+                  </span>
+                ) : "—"}
+              </td>
+              <td>{fmtDate(r.due_date)}</td>
+              <td className="hide-sm">{fmtDate(r.created_at)}</td>
               {isLab && (
-                <td style={td}>
+                <td>
                   {r.status === "submitted" && (
-                    <button onClick={(e) => onCheckIn(e, r.id, r.version)}>Check in</button>
+                    <button className="small" disabled={busyId === r.id}
+                      onClick={(e) => onCheckIn(e, r.id, r.version)}>
+                      {busyId === r.id ? "…" : "Check in"}
+                    </button>
                   )}
                 </td>
               )}
             </tr>
           ))}
           {items.length === 0 && (
-            <tr><td colSpan={5} style={td}><em>No prescriptions.</em></td></tr>
+            <tr><td colSpan={8}><em className="empty">No prescriptions.</em></td></tr>
           )}
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
   );
 }

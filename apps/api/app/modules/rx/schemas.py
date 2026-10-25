@@ -96,6 +96,54 @@ class RxOut(BaseModel):
     submitted_at: datetime | None
     checked_in_at: datetime | None
     completed_at: datetime | None
+    carrier: str | None
+    tracking_number: str | None
+    shipped_at: datetime | None
+    received_at: datetime | None
+    delivered_at: datetime | None
+    qc_status: str
+    created_at: datetime
+    # denormalized display fields — filled by _display_fields, not columns
+    patient_label: str | None = None
+    practice_name: str | None = None
+    lab_name: str | None = None
+    doctor_name: str | None = None
+    location_name: str | None = None
+
+
+class QcRequest(BaseModel):
+    result: str = Field(pattern="^(pass|fail)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ShipRequest(BaseModel):
+    carrier: str = Field(min_length=1, max_length=120)
+    tracking_number: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class FulfillmentNote(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class QcRecordOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    rx_id: uuid.UUID
+    result: str
+    note: str | None
+    checked_by_user_id: uuid.UUID
+    checked_by_org_id: uuid.UUID
+    created_at: datetime
+
+
+class FulfillmentEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    event: str
+    actor_user_id: uuid.UUID
+    actor_org_id: uuid.UUID
+    note: str | None
     created_at: datetime
 
 
@@ -112,6 +160,7 @@ class RxTransitionOut(BaseModel):
 class CommentCreate(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
     parent_id: uuid.UUID | None = None
+    file_reference_id: uuid.UUID | None = None
 
 
 class CommentOut(BaseModel):
@@ -120,9 +169,51 @@ class CommentOut(BaseModel):
     rx_id: uuid.UUID
     author_membership_id: uuid.UUID
     parent_id: uuid.UUID | None
+    file_reference_id: uuid.UUID | None
     body: str
     created_at: datetime
     edited_at: datetime | None
+
+
+class NotificationCreate(BaseModel):
+    rx_id: uuid.UUID
+    kind: str = Field(pattern="^(info|ack_required|approval_required)$")
+    subject: str = Field(min_length=1, max_length=300)
+    body: str | None = Field(default=None, max_length=4000)
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    rx_id: uuid.UUID
+    created_by_org_id: uuid.UUID
+    kind: str
+    subject: str
+    body: str | None
+    rx_version_at_creation: int | None
+    status: str
+    resolved_at: datetime | None
+    created_at: datetime
+
+
+class DecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    # business signature record — required, non-blank
+    signature_name: str = Field(min_length=1, max_length=200)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class ApprovalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    notification_id: uuid.UUID
+    rx_id: uuid.UUID
+    rx_version: int
+    decision: str
+    signature_name: str
+    comment: str | None
+    decided_by_user_id: uuid.UUID
+    decided_at: datetime
 
 
 class CatalogItemOut(BaseModel):
@@ -134,6 +225,21 @@ class CatalogItemOut(BaseModel):
     category: str | None
     arch_scope: str
     option_schema: dict | None
+
+
+class RxTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    # items + optional defaults; ids re-validated server-side.
+    payload: dict
+
+
+class RxTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    org_id: uuid.UUID
+    name: str
+    payload: dict
+    created_at: datetime
 
 
 class AttachmentCreate(BaseModel):

@@ -138,5 +138,101 @@ async def seed() -> None:
               f"LA={orgs['LA'].id} LB={orgs['LB'].id}")
 
 
+async def purge() -> None:
+    """SAFE-007: remove the synthetic dataset — dev/test only.
+
+    Deletes the seeded orgs (PA/LA/LB), their memberships/roster/locations/
+    connections, patients, tenant-wide catalog rows, and the demo users.
+    Rx/asset rows disappear via org-scoped deletes below; S3 objects under
+    the org prefixes are removed best-effort afterwards by the caller (see
+    scripts/cleanup_synthetic.sh) — the DB purge itself stays transactional.
+    """
+    from app.config import get_settings
+    if get_settings().env not in ("dev", "test"):
+        raise SystemExit("refusing to purge outside dev/test")
+    from sqlalchemy import delete, or_
+    from app.modules.assets.models import Asset, FileReference, UploadSession
+    from app.modules.clinical.models import Patient, TreatmentCase
+    from app.modules.iam.models import Location
+    from app.modules.rx.models import (Approval, FulfillmentEvent,
+                                       IdempotencyRecord, Notification,
+                                       QcRecord, Rx, RxBundle, RxComment,
+                                       RxItem, RxTemplate, RxTransition)
+
+    async with admin_session() as db:
+        org_ids = [r[0] for r in (await db.execute(
+            select(Organization.id).where(
+                Organization.name.in_(
+                    ["Smile Ortho (synthetic)", "Friendly Lab (synthetic)", "Unconnected Lab (synthetic)"])))
+        ).all()]
+        if not org_ids:
+            print("purge: no synthetic orgs found — nothing to do")
+            return
+        rx_ids = [r[0] for r in (await db.execute(select(Rx.id).where(
+            (Rx.practice_org_id.in_(org_ids))
+            | (Rx.lab_org_id.in_(org_ids))))).all()]
+        patient_ids = [r[0] for r in (await db.execute(
+            select(Patient.id).where(Patient.org_id.in_(org_ids)))).all()]
+        case_ids = [r[0] for r in (await db.execute(
+            select(TreatmentCase.id).where(
+                TreatmentCase.org_id.in_(org_ids)))).all()]
+        asset_ids = [r[0] for r in (await db.execute(
+            select(Asset.id).where(Asset.org_id.in_(org_ids)))).all()]
+        for model, col in ((Approval, Approval.rx_id),
+                           (Notification, Notification.rx_id),
+                           (QcRecord, QcRecord.rx_id),
+                           (FulfillmentEvent, FulfillmentEvent.rx_id),
+                           (RxComment, RxComment.rx_id),
+                           (RxTransition, RxTransition.rx_id),
+                           (RxItem, RxItem.rx_id),
+                           (RxBundle, RxBundle.rx_id)):
+            if rx_ids:
+                await db.execute(delete(model).where(col.in_(rx_ids)))
+        # file references point at rx/patient/case subjects AND assets
+        subject_ids = rx_ids + patient_ids + case_ids
+        ref_conds = [FileReference.granted_by_org_id.in_(org_ids)]
+        if subject_ids:
+            ref_conds.append(FileReference.subject_id.in_(subject_ids))
+        if asset_ids:
+            ref_conds.append(FileReference.asset_id.in_(asset_ids))
+        await db.execute(delete(FileReference).where(or_(*ref_conds)))
+        if rx_ids:
+            await db.execute(delete(Rx).where(Rx.id.in_(rx_ids)))
+        for model, col in ((RxTemplate, RxTemplate.org_id),
+                           (UploadSession, UploadSession.org_id),
+                           (Asset, Asset.org_id),
+                           (TreatmentCase, TreatmentCase.org_id),
+                           (Patient, Patient.org_id),
+                           (OrgConnection, OrgConnection.practice_org_id),
+                           (RosterMember, RosterMember.org_id),
+                           (Location, Location.org_id),
+                           (Membership, Membership.org_id)):
+            await db.execute(delete(model).where(col.in_(org_ids)))
+        await db.execute(delete(OrgConnection).where(
+            OrgConnection.lab_org_id.in_(org_ids)))
+        await db.execute(delete(Organization).where(
+            Organization.id.in_(org_ids)))
+        from app.modules.auth.models import AuthChallenge, AuthSession
+        user_ids = [r[0] for r in (await db.execute(
+            select(UserAccount.id).where(
+                UserAccount.email.like("%.dev")))).all()]
+        if user_ids:
+            await db.execute(delete(IdempotencyRecord).where(
+                IdempotencyRecord.user_id.in_(user_ids)))
+            await db.execute(delete(AuthSession).where(
+                AuthSession.user_id.in_(user_ids)))
+            await db.execute(delete(AuthChallenge).where(
+                AuthChallenge.user_id.in_(user_ids)))
+            await db.execute(delete(UserAccount).where(
+                UserAccount.id.in_(user_ids)))
+        # drop now-empty tenants
+        await db.execute(delete(Tenant).where(Tenant.id.notin_(
+            select(Organization.tenant_id))))
+        await db.commit()
+        print(f"purge ok: removed {len(org_ids)} synthetic orgs, "
+              f"{len(rx_ids)} rx, demo users")
+
+
 if __name__ == "__main__":
-    asyncio.run(seed())
+    import sys
+    asyncio.run(purge() if "--purge" in sys.argv else seed())

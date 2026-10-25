@@ -1,0 +1,70 @@
+feature_id,task_id,disposition,status,backend_api,web_page,data_model_migration,test_evidence,missing_behavior,milestone
+ASSET-001,TASK-0013,CORE,VERIFIED,POST /uploads; POST /uploads/{id}/complete,PatientDetail upload; RxDetail attach,asset+upload_session (0003/0004),test_assets.py; CI_JOB:asset-integration,,S1b
+ASSET-002,TASK-0013,CORE,VERIFIED,POST /assets/{id}/references; DELETE /assets/{id}/references/{ref_id},NONE,file_reference+asset.parent_asset_id (0003),test_assets.py,,S1b
+ASSET-003,TASK-0014,SIMPLIFY,VERIFIED,POST /assets/{id}/download; MODULE:apps/web/src/pages/StlPreview.tsx,PatientDetail Preview (three.js),NONE,apps/web/tests/e2e/studio.spec.ts,,M1
+ASSET-005,TASK-0014,CORE,VERIFIED,POST /assets/{id}/references; DELETE /assets/{id}/references/{ref_id},RxDetail attach/detach,file_reference+access_grant (0003),test_assets.py; test_rx.py,,S1b
+ASSET-008,TASK-0013,CORE,VERIFIED,POST /uploads/{id}/complete,NONE,asset.sha256 (0003),test_assets.py,,S1b
+ASSET-009,TASK-0013,CORE,VERIFIED,MODULE:apps/api/app/modules/assets/router.py (no mutating endpoint),NONE,asset.parent_asset_id (0003),test_assets.py,,S1b
+ASSET-010,TASK-0013,SIMPLIFY,VERIFIED,POST /uploads (200MB cap); POST /uploads/{id}/complete (sha+structure); MODULE:apps/api/app/modules/assets/router.py (AV hook ASSET_AV_ENGINE),NONE,upload_session.format_status (0004),test_assets.py; test_m4.py; apps/api/tests/test_s3_compat.py,,M4
+COM-001,TASK-0019,CORE,VERIFIED,GET /rx/{id}/comments; POST /rx/{id}/comments (file_reference_id),RxDetail comments + attachment anchor,rx_comment.file_reference_id (0010),test_collab.py; collab.spec.ts,,M2
+COM-002,TASK-0020,CORE,VERIFIED,POST /notifications; GET /notifications,Inbox page,notification (0010),test_collab.py; collab.spec.ts,,M2
+COM-004,TASK-0020,CORE,VERIFIED,POST /notifications (kind=approval_required); POST /notifications/{id}/decision,Inbox approve/reject + signature,notification.rx_version_at_creation+approval (0010),test_collab.py; collab.spec.ts,,M2
+COM-007,TASK-0019,CORE,VERIFIED,GET /notifications (counts unread/approval_pending; kind/status filters),Inbox page w/ todo counts,notification (0010),test_collab.py; collab.spec.ts,,M2
+FLOW-001,TASK-0017,CORE,VERIFIED,GET /dashboard,RxList dashboard strip,rx cols (0005/0011),test_fulfill.py,,M3
+FLOW-002,TASK-0017,CORE,VERIFIED,"GET /rx (status,date_from,date_to,lab_org_id,fulfillment_status,due_before)",RxList filter controls,NONE,test_rx.py; test_fulfill.py,,M3
+FLOW-003,TASK-0017,SIMPLIFY,VERIFIED,GET /rx (status/date/lab subset),RxList filters,NONE,test_fulfill.py,,M3
+FLOW-005,TASK-0015,CORE,VERIFIED,GET /rx,RxList,rx.status (0005),test_rx.py,,S1b
+FLOW-006,TASK-0015,CORE,VERIFIED,POST /rx/{id}/check-in; POST /rx/{id}/bundle-download,RxDetail Check-in + Download&Check-in,rx.status+checked_in_via (0005/0006),test_rx.py; test_rx_s1b1.py; rx.spec.ts,,S1b
+FLOW-008,TASK-0015,CORE,VERIFIED,POST /rx/{id}/unsubmit,RxDetail Unsubmit error path,rx.status (0005),test_rx.py; test_rx_finalgate.py; rx.spec.ts,,S1b
+FLOW-009,TASK-0015,CORE,VERIFIED,POST /rx/{id}/unsubmit,RxDetail Unsubmit,rx.status (0005),test_rx.py,,S1b
+FLOW-010,TASK-0015,CORE,VERIFIED,POST /rx/{id}/attachments,RxDetail attach,file_reference subject rx (0003),test_rx.py,,S1b
+FLOW-011,TASK-0015,CORE,VERIFIED,POST /rx/{id}/complete,RxDetail Mark complete,rx.completed_at+completed_by_user_id (0010),test_collab.py; collab.spec.ts,,M2
+FLOW-012,TASK-0016,MANUAL,VERIFIED,POST /rx/{id}/ship (carrier+tracking_number manual),RxDetail ship form,rx.carrier+tracking_number+shipped_* (0011),test_fulfill.py; fulfill.spec.ts,,M3
+FLOW-013,TASK-0016,CORE,VERIFIED,POST /rx/{id}/receive; POST /rx/{id}/deliver,RxDetail receipt/delivery controls,rx.received_*+delivered_* (0011),test_fulfill.py; fulfill.spec.ts,,M3
+FLOW-014,TASK-0017,SIMPLIFY,VERIFIED,GET /dashboard (due_soon fixed 72h),RxList due-soon chip,NONE,test_fulfill.py,,M3
+FLOW-016,TASK-0015,CORE,VERIFIED,GET /rx/{id}/transitions; GET /rx/{id}/fulfillment,RxDetail history + fulfillment events,rx_transition.seq+fulfillment_event+qc_record (0007/0011),test_rx.py; test_fulfill.py,,M3
+IAM-001,TASK-0001,CORE,VERIFIED,PATCH /orgs/{id},OrgSettings Profile&defaults,org.default_*+timezone (0009),test_studio.py; studio.spec.ts,,M1
+IAM-002,TASK-0001,CORE,VERIFIED,GET/POST /orgs/{id}/locations; PATCH /orgs/{id}/locations/{location_id},OrgSettings Locations,location (0001),test_studio.py; studio.spec.ts,,M1
+IAM-003,TASK-0003,CORE,VERIFIED,GET/POST /orgs/{id}/roster; PATCH /orgs/{id}/roster/{roster_id}; PATCH /orgs/{id} (default_doctor),OrgSettings Roster + RxCreate prefill,roster_member+org.default_* (0009),test_studio.py,,M1
+IAM-004,TASK-0003,CORE,VERIFIED,GET/POST /orgs/{id}/roster; PATCH /orgs/{id}/roster/{roster_id},OrgSettings Roster,roster_member (0001),test_studio.py,,M1
+IAM-006,TASK-0002,CORE,VERIFIED,POST /auth/login; POST /auth/logout; GET /auth/me,login form + role-aware landing,user_account+membership+auth_session (0001/0002),test_auth.py; auth.spec.ts,,S1b
+IAM-007,TASK-0004,CORE,VERIFIED,GET/POST /org-connections; PATCH /org-connections/{id},OrgSettings Connections,org_connection (0001/0002),test_connection_security.py; studio.spec.ts,,M1
+IAM-009,TASK-0002,CORE,VERIFIED,POST /auth/password,OrgSettings Security,user_account (0001),test_auth.py; studio.spec.ts,,M1
+IAM-010,TASK-0002,SIMPLIFY,VERIFIED,PATCH /orgs/{id} (timezone),OrgSettings timezone field,organization.timezone (0001/0009),test_studio.py,,M1
+IAM-011,TASK-0002,CORE,VERIFIED,MODULE:apps/api/app/security.py (ROLE_PERMISSIONS); MODULE:apps/api/app/deps.py (require_perm); DOC:docs/security/permission-matrix.md,role-scoped UI render,member_role+RLS policies (0001/0002),test_isolation.py; test_rbac_audit.py,,S1b
+IAM-012,TASK-0002,CORE,VERIFIED,POST /auth/2fa/setup; POST /auth/2fa/enable; POST /auth/2fa/verify,2FA challenge UI,user_account.totp_* (0002),test_auth.py; totp.ts,,S1b
+INT-005,TASK-0013,CORE,VERIFIED,POST /uploads; POST /uploads/{id}/complete,PatientDetail/RxDetail upload,asset+upload_session (0003),test_assets.py,,S1b
+INT-011,TASK-0047,SIMPLIFY,VERIFIED,DOC:docs/api/openapi.yaml,NONE,openapi.yaml,test_contract.py,,S1b
+LAB-001,TASK-0033,CORE,VERIFIED,POST /rx/{id}/check-in; POST /rx/{id}/bundle-download,RxDetail lab actions,rx.status+checked_in_via (0005),test_rx.py; rx.spec.ts,,S1b
+LAB-002,TASK-0033,CORE,VERIFIED,POST /notifications (lab->practice); POST /notifications/{id}/decision,RxDetail raise-issue; Inbox decision,notification+approval (0010),test_collab.py; collab.spec.ts,,M2
+LAB-019,TASK-0038,MANUAL,VERIFIED,POST /rx/{id}/ship; POST /rx/{id}/receive; POST /rx/{id}/deliver,RxDetail fulfillment controls,rx ship/receive/deliver cols (0011),test_fulfill.py; fulfill.spec.ts,,M3
+PAT-001,TASK-0005,CORE,VERIFIED,POST /patients,Patients create form,patient (0003),test_patients.py; patients.spec.ts,,S1b
+PAT-002,TASK-0005,CORE,VERIFIED,GET /patients (q + dup hint),Patients debounced search + dup banner,patient (0003),test_patients.py; patients.spec.ts,,M1
+PAT-003,TASK-0005,CORE,VERIFIED,GET /patients?external_ref=,Patients external_ref field,patient.external_ref (0003),test_patients.py,,S1b
+PAT-004,TASK-0005,CORE,VERIFIED,GET /patients?dob= + dup response carries dob,Patients dup banner shows dob,patient.dob (0003),test_patients.py,,S1b
+PAT-005,TASK-0006,CORE,VERIFIED,GET /patients/{id}/rx-history,PatientDetail Prescription history,rx.patient_id (0005),test_rx.py,,M1
+PAT-006,TASK-0007,SIMPLIFY,VERIFIED,GET /patients/{id}/assets; POST /uploads,PatientDetail STL upload + asset list,file_reference subject patient (0003),test_assets.py; patients.spec.ts,,S1b
+PAT-008,TASK-0006,CORE,VERIFIED,GET /patients/{id}/cases; POST /patients/{id}/cases,PatientDetail cases,treatment_case (0003),test_patients.py,,S1b
+PAT-009,TASK-0007,CORE,VERIFIED,DELETE /patients/{id} (soft delete; in-flight Rx -> 409 patient_has_inflight_rx),PatientDetail delete,patient.deleted_at (0003),test_patients.py (PAT-009 suite),,S1b
+RX-001,TASK-0008,CORE,VERIFIED,POST /rx,RxCreate,rx (0005),test_rx.py; rx.spec.ts,,S1b
+RX-002,TASK-0008,CORE,VERIFIED,POST /rx (doctor/location/lab/due_date),RxCreate selects,rx cols (0005),test_rx.py; rx.spec.ts,,S1b
+RX-003,TASK-0008,CORE,VERIFIED,POST /rx (rx_number unique mint),RxDetail header,rx.rx_number (0005),test_rx.py,,S1b
+RX-004,TASK-0008,CORE,VERIFIED,PATCH /rx/{id}; PUT /rx/{id}/items,RxDetail draft editing,rx.status draft (0005),test_rx.py; rx.spec.ts,,S1b
+RX-006,TASK-0009,SIMPLIFY,VERIFIED,GET /catalog/parts,RxCreate picker,catalog_item (0005)+seed,test_rx.py; seed.py,,S1b
+RX-007,TASK-0009,SIMPLIFY,VERIFIED,GET /catalog/appliances,RxCreate picker,catalog_item (0005)+seed,test_rx.py,,S1b
+RX-008,TASK-0009,SIMPLIFY,VERIFIED,PUT /rx/{id}/items (tooth_ops FDI validated),RxCreate ToothPicker grid,rx_item.tooth_ops (0005),test_rx.py; studio.spec.ts,,M1
+RX-009,TASK-0009,CORE,VERIFIED,PUT /rx/{id}/items; POST /rx/{id}/submit (option_schema required enforced),RxCreate options input,catalog_item.option_schema (0005),test_rx.py,,S1b
+RX-010,TASK-0010,CORE,VERIFIED,GET/POST /templates; GET/DELETE /templates/{id},RxCreate template apply + save,rx_template (0009),test_studio.py; studio.spec.ts,,M1
+RX-013,TASK-0011,CORE,VERIFIED,POST /rx; PATCH /rx/{id} (notes 4000),RxCreate/RxDetail notes,rx.notes (0005),test_rx.py,,S1b
+RX-019,TASK-0012,CORE,VERIFIED,POST /rx/{id}/attachments,RxDetail attach,file_reference (0003),test_rx.py; test_rx_s1b1.py,,S1b
+RX-020,TASK-0012,CORE,VERIFIED,POST /rx/{id}/submit (If-Match+Idempotency-Key+signature),RxDetail Sign&Submit,rx sig/version cols+idempotency_record (0005-0008),test_rx.py; test_rx_s1b1.py; test_rx_finalgate.py; rx.spec.ts,,S1b
+RX-021,TASK-0012,CORE,VERIFIED,POST /rx/{id}/bundle-download; GET /rx/{id}/bundle,RxDetail bundle list/download,rx_bundle (0006),test_rx_s1b1.py; test_rx_finalgate.py,,S1b
+SAFE-001,TASK-0048,CORE,VERIFIED,MODULE:apps/api/app/audit.py (same-tx audit_event),NONE,audit_event+rx sig cols (0001/0008),test_rbac_audit.py; test_rx_finalgate.py,,S1b
+SAFE-002,TASK-0001,CORE,VERIFIED,MODULE:apps/api/alembic/versions/0002_b01_hardening.py (RLS policies); MODULE:apps/api/app/deps.py,NONE,RLS policies (0001-0011),test_isolation.py,,S1b
+SAFE-003,TASK-0049,CORE,VERIFIED,MODULE:apps/api/app/modules/auth/router.py (totp_secret_enc Fernet); DOC:docs/security/data-protection.md,NONE,totp_secret_enc (0002),test_security.py,,M4
+SAFE-004,TASK-0013,CORE,VERIFIED,POST /assets/{id}/download (TTL grant),RxDetail download,access_grant.expires_at (0003),test_assets.py; test_rx_s1b1.py,,S1b
+SAFE-005,TASK-0013,CORE,VERIFIED,POST /uploads/{id}/complete (size+format+sha); MODULE:apps/api/app/config.py (ASSET_AV_ENGINE),NONE,format_status (0004),test_assets.py; test_m4.py,,M4
+SAFE-006,TASK-0049,CORE,VERIFIED,SCRIPT:scripts/backup.py; SCRIPT:scripts/restore.py,NONE,manifest json + scratch restore,MANUAL_DRILL:docs/audit/backup-restore-drill.md,,M4
+SAFE-008,TASK-0050,CORE,VERIFIED,SCRIPT:apps/api/app/seed.py (env guard + --purge),NONE,seed.py,test_m4.py (purge guard),,S1b
+SAFE-009,TASK-0050,SIMPLIFY,VERIFIED,GET /admin/export (asset_manifest w/ presigned download_url+sha256),NONE,admin/router.py,test_m4.py,,M4
+SAFE-010,TASK-0051,CORE,VERIFIED,MODULE:apps/api/app/config.py (prod guard); SCRIPT:scripts/preflight.py,NONE,config validators,test_config.py; test_m4.py; DOC:docs/ops/deploy-upgrade-rollback.md,,M4

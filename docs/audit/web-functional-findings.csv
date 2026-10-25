@@ -1,0 +1,23 @@
+id,severity,source,page/component,issue,status
+F-01,P0,audit-auto,App.tsx,no URL routing — state-only navigation broke deep links/history,FIXED
+F-02,P0,audit-auto,App.tsx,detail-page refresh lost state and dropped to login shell,FIXED
+F-03,P1,audit-auto,styles,bare unstyled layout with 720px global cap and no design system,FIXED
+F-04,P1,code-review,RxCreate.tsx,window.prompt() collected template names and required catalog options,FIXED
+F-05,P1,code-review,OrgSettings.tsx,window.prompt() used for location renames,FIXED
+F-06,P1,code-review,RxList.tsx,only Rx-number/status/due columns — no patient or lab identity,FIXED
+F-07,P1,code-review,rx list APIs,list rows showed raw UUIDs; no display fields in RxOut,FIXED
+F-08,P1,code-review,RxDetail.tsx,single ungrouped scroll of fields/actions/comments/issues/history,FIXED
+F-09,P1,code-review,StlPreview.tsx,auto-rotated mesh with no orbit/pan/zoom controls,FIXED
+F-10,P1,code-review,App.tsx,anonymous page loads fired me() and logged 401 console noise,FIXED
+F-11,P1,code-review,RxDetail.tsx + PatientDetail.tsx,window.open() after async fetch — popup-blocked downloads,FIXED
+F-12,P1,code-review,auth/router.py + mutation handlers,logout dropped delete Set-Cookie (fresh Response discarded them) and act()/run() were re-enterable on double-click,FIXED
+F-13,P2,code-review,infra/docker-compose.yml,dev login/write rate limits broke repeatable browser suites,FIXED
+F-14,P2,code-review,RxCreate.tsx,tooth-palette UX still thin vs EasyRx picker,ROADMAP
+F-15,P2,code-review,global,no skip-link / landmark polish beyond basic roles,ROADMAP
+F-16,P2,code-review,RxList.tsx,mobile list could collapse to stacked cards,ROADMAP
+F-17,P2,code-review,RxDetail.tsx,comment→attachment anchor only scrolls,ROADMAP
+F-18,P2,code-review,App.tsx,only prefetching on nav hover,ROADMAP
+F-19,P2,code-review,RxDetail.tsx,approval history exists but no timeline component,ROADMAP
+F-20,P2,code-review,App.tsx,unread badge refreshes only on nav,ROADMAP
+F-21,P2,audit-auto,RxDetail.tsx,posting an empty comment yields a silent disabled-button no-op,ROADMAP
+F-22,P3,code-review,RxCreate.tsx + api.ts,server-side validation errors shown only as text (no field mapping),ROADMAP

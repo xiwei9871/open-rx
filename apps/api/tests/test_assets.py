@@ -441,3 +441,52 @@ async def test_cleanup_only_touches_caller_tenant(client, s3ok, admindb):
         "SELECT status FROM upload_session WHERE id = :i"),
         {"i": sid})).scalar_one()
     assert status == "open", "foreign-tenant session must stay untouched"
+
+
+async def test_interrupted_upload_leaves_no_half_file(client, s3ok, admindb):
+    """E2E-12: a session whose PUT was interrupted (partial bytes staged,
+    complete never succeeding) must leave NO downloadable asset — no row,
+    no reachable object, and the stale staging object is reaped."""
+    from sqlalchemy import text
+    await login(client, "staff@pa.dev")
+    content = _binary_stl(4, tag=uuid.uuid4().bytes)
+    r = await client.post("/v1/uploads", json={
+        "sha256": hashlib.sha256(content).hexdigest(),
+        "bytes": len(content), "kind": "stl", "jaw": "upper"})
+    assert r.status_code == 201
+    sess = r.json()
+
+    # interrupted PUT: only the first half of the file ever lands
+    partial = content[: len(content) // 2]
+    assert (await _put_presigned(sess["upload_urls"][0], partial)) == 200
+
+    # trying to complete the truncated upload is refused — no asset created
+    done = await client.post(f"/v1/uploads/{sess['id']}/complete",
+                             json={"sha256": hashlib.sha256(content).hexdigest()})
+    assert done.status_code == 422, done.text
+    assets = (await admindb.execute(text(
+        "SELECT count(*) FROM asset WHERE sha256 = :s"),
+        {"s": hashlib.sha256(content).hexdigest()})).scalar_one()
+    assert assets == 0
+
+    # expire the session -> next declare reaps the half-written staging object
+    staging_key = (await admindb.execute(text(
+        "SELECT storage_key FROM upload_session WHERE id = :i"),
+        {"i": sess["id"]})).scalar_one()
+    await admindb.execute(text(
+        "UPDATE upload_session SET expires_at = now() - interval '1s' "
+        "WHERE id = :i"), {"i": sess["id"]})
+    await admindb.commit()
+    fresh = _binary_stl(2, tag=uuid.uuid4().bytes)
+    r = await client.post("/v1/uploads", json={
+        "sha256": hashlib.sha256(fresh).hexdigest(),
+        "bytes": len(fresh), "kind": "stl", "jaw": "na"})
+    assert r.status_code == 201, r.text  # triggers cleanup of stale session
+    from botocore.exceptions import ClientError
+    with pytest.raises(ClientError):
+        await asyncio.to_thread(
+            s3().head_object, Bucket=_s.s3_bucket, Key=staging_key)
+    # the half-file session can never be completed afterwards either
+    done2 = await client.post(f"/v1/uploads/{sess['id']}/complete",
+                              json={"sha256": hashlib.sha256(content).hexdigest()})
+    assert done2.status_code in (404, 409, 422)

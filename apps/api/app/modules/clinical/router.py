@@ -19,6 +19,7 @@ from app.audit import record
 from app.deps import (Db, Me, Principal, limit_writes, require_perm,
                       tenant_commit, _deny)
 from app.modules.clinical.models import Patient, TreatmentCase
+from app.modules.rx.models import Rx
 from app.modules.clinical.schemas import (CaseCreate, CaseOut, PatientCreate,
                                           PatientOut, PatientUpdate)
 
@@ -154,8 +155,32 @@ async def delete_patient(patient_id: uuid.UUID, request: Request, db: Db,
     if not pat or pat.tenant_id != p.tenant_id or pat.org_id != p.org.id \
             or pat.deleted_at is not None:
         await _deny(db, request, p, "patient_not_in_org")
-    # PROVISIONAL (contract): block when an active in-flight Rx exists.
-    # No Rx table exists yet — when it lands, add the check BEFORE delete.
+    # PAT-009: in-flight Rx guard. A patient may only be soft-deleted when
+    # every Rx is terminal: clinically finished AND logistically settled.
+    #   in-flight = clinical status not in {completed, cancelled}
+    #             OR completed but fulfillment still moving
+    #                (qc_pending/qc_passed/shipped/received).
+    # released  = cancelled, or completed with fulfillment in {none,delivered}
+    # The delete is a soft tombstone only — rx rows, signatures, attachments
+    # and approval history are never touched.
+    inflight = (await db.execute(select(Rx.id, Rx.rx_number, Rx.status)
+        .where(Rx.patient_id == patient_id,
+               or_(Rx.status.notin_(("completed", "cancelled")),
+                   Rx.fulfillment_status.notin_(("none", "delivered"))))
+        .order_by(Rx.rx_number))).all()
+    if inflight:
+        record(db, action="patient.delete_blocked", object_type="patient",
+               object_id=pat.id, tenant_id=p.tenant_id, org_id=p.org.id,
+               actor_user_id=p.user.id, request=request,
+               after={"inflight_rx": [str(r.rx_number) for r in inflight]})
+        await tenant_commit(db, p)
+        raise HTTPException(status_code=409, detail={
+            "code": "patient_has_inflight_rx",
+            "message": f"Patient has {len(inflight)} in-flight "
+                       f"prescription(s); complete and deliver or cancel "
+                       f"them before deleting",
+            "inflight_rx": [{"id": str(r.id), "rx_number": r.rx_number,
+                             "status": r.status} for r in inflight]})
     pat.deleted_at = datetime.now(UTC)
     record(db, action="patient.deleted", object_type="patient",
            object_id=pat.id, tenant_id=p.tenant_id, org_id=p.org.id,

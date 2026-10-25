@@ -28,8 +28,20 @@ REQUIRED_SPEC_OPS = {
     "listRx", "createRx", "getRx", "updateRx", "replaceRxItems",
     "submitRx", "unsubmitRx", "checkInRx", "downloadRxBundle",
     "listRxBundles",
-    "attachToRx", "listRxComments", "createRxComment", "listRxTransitions",
+    "attachToRx", "listRxAttachments", "listRxComments", "createRxComment",
+    "listRxTransitions",
     "patientRxHistory", "listParts", "listAppliances",
+    # M1: org admin + templates
+    "updateOrg", "updateLocation", "updateRosterMember",
+    "listTemplates", "createTemplate", "getTemplate", "deleteTemplate",
+    # M2: notifications / approvals
+    "listNotifications", "createNotification", "markNotificationRead",
+    "decideNotification", "completeRx",
+    # M3: fulfillment
+    "recordRxQc", "shipRx", "receiveRx", "deliverRx", "getRxFulfillment",
+    "rxDashboard",
+    # M4: admin export
+    "adminExport",
 }
 EXTRA_AUTH_OPS = {
     "login", "verifyTwoFA", "logout", "me",

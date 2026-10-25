@@ -50,6 +50,7 @@ test.describe("rx core loop", () => {
 
     // lab side: inbox -> check-in
     await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await signIn(page, LAB.email, LAB.password);
     await expect(
       page.getByRole("heading", { name: "Received Prescriptions" })).toBeVisible();
@@ -61,6 +62,7 @@ test.describe("rx core loop", () => {
 
     // practice side: unsubmit is rejected with a clear message
     await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await signIn(page, PRACTICE.email, PRACTICE.password);
     await page.getByRole("button", { name: "Prescriptions" }).click();
     await page.getByRole("cell", { name: rxNum }).click();
@@ -87,15 +89,17 @@ test.describe("rx core loop", () => {
       .split(" ")[0];
 
     // lab: "Download & Check-in" — the POST prepares the bundle and checks
-    // in atomically; the presigned URL opens in a new tab for the GET fetch.
+    // in atomically; the presigned bytes download via blob+anchor (popup
+    // blockers would eat an async window.open).
     await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await signIn(page, LAB.email, LAB.password);
     await page.getByRole("cell", { name: rxNum }).click();
     await expect(page.getByRole("heading", { name: /— Submitted/ })).toBeVisible();
-    const popup = page.waitForEvent("popup", { timeout: 5000 }).catch(() => null);
+    const dl = page.waitForEvent("download", { timeout: 8000 }).catch(() => null);
     await page.getByRole("button", { name: "Download & Check-in" }).click();
-    const tab = await popup;
-    if (tab) await tab.close();
+    const file = await dl;
+    expect(file).not.toBeNull();
     await expect(page.getByRole("heading", { name: /— Checked-In/ })).toBeVisible();
     await expect(page.getByText(/via download/)).toBeVisible();
     // transition trail records the download check-in
@@ -119,5 +123,41 @@ test.describe("rx core loop", () => {
     await page.getByLabel("Notes").fill("re-edited after unsubmit");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("Saved");
+  });
+});
+
+// E2E-02: a saved draft persists fully across logout -> login — fields,
+// items and notes survive a fresh session (server-side draft, not local).
+test.describe("rx draft persistence", () => {
+  test("draft persists across logout and fresh login", async ({ page }) => {
+    await signIn(page, PRACTICE.email, PRACTICE.password);
+    await page.getByRole("button", { name: "Prescriptions" }).click();
+    await page.getByRole("button", { name: "New Rx" }).click();
+    await selectByText(page, "Patient", "Synthetic, Ava");
+    await selectByText(page, "Laboratory", "Friendly Lab");
+    await page.getByLabel("Due date").fill("2031-02-20");
+    await selectByText(page, "catalog", "Hawley retainer");
+    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByLabel("Notes").fill("draft-e2e02-notes");
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.getByRole("heading", { name: /— Saved/ })).toBeVisible();
+    const rxNum = (await page.getByRole("heading", { level: 2 }).innerText())
+      .split(" ")[0];
+
+    // leave the page entirely, sign out, sign back in
+    await page.getByRole("button", { name: "Patients" }).click();
+    await expect(page.getByRole("heading", { name: "Patients" })).toBeVisible();
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await signIn(page, PRACTICE.email, PRACTICE.password);
+    await page.getByRole("button", { name: "Prescriptions" }).click();
+    await page.getByRole("cell", { name: rxNum }).click();
+
+    // nothing was lost: status, item, notes, due date all still present
+    await expect(page.getByRole("heading", { name: /— Saved/ })).toBeVisible();
+    await expect(page.locator("li", { hasText: "HWL — Hawley retainer" }))
+      .toBeVisible();
+    await expect(page.getByLabel("Notes")).toHaveValue("draft-e2e02-notes");
+    await expect(page.getByLabel("Due date")).toHaveValue("2031-02-20");
   });
 });

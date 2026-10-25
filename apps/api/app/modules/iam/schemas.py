@@ -24,7 +24,29 @@ class OrgOut(BaseModel):
     name: str
     status: str
     timezone: str
+    default_doctor_id: UUID | None = None
+    default_location_id: UUID | None = None
     created_at: datetime
+
+
+class OrgUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
+    default_doctor_id: UUID | None = None
+    default_location_id: UUID | None = None
+
+
+class LocationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    address: str | None = None
+    phone: str | None = None
+
+
+class RosterMemberUpdate(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1)
+    credentials: str | None = None
+    is_default: bool | None = None
+    status: Literal["active", "disabled"] | None = None
 
 
 class LocationCreate(BaseModel):

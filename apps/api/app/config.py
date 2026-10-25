@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     s3_public_endpoint_url: str | None = None
     upload_max_bytes: int = 200 * 1024 * 1024  # 200MB STL ceiling
     upload_session_ttl_seconds: int = 3600
+    # ASSET-010 pluggable scan hook: "none" = structural checks only;
+    # "eicar_stub" = deterministic test engine (rejects the EICAR marker —
+    # lets CI exercise the plug point without a real AV daemon).
+    asset_av_engine: str = "none"
     session_secret: str = _DEV_DEFAULTS["session_secret"]
     # base64 Fernet key; REQUIRED in prod (else derived from session_secret)
     totp_encryption_key: str | None = None

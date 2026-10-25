@@ -1,0 +1,58 @@
+[
+  {
+    "role": "practice_admin",
+    "page": "patient-detail",
+    "severity": "P0",
+    "kind": "routing",
+    "detail": "detail URL is still http://localhost:5173/ — no deep-link/history"
+  },
+  {
+    "role": "practice_admin",
+    "page": "walk",
+    "severity": "P0",
+    "kind": "crash",
+    "detail": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Prescriptions' })\n"
+  },
+  {
+    "role": "practice_doctor",
+    "page": "patient-detail",
+    "severity": "P0",
+    "kind": "routing",
+    "detail": "detail URL is still http://localhost:5173/ — no deep-link/history"
+  },
+  {
+    "role": "practice_doctor",
+    "page": "walk",
+    "severity": "P0",
+    "kind": "crash",
+    "detail": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Prescriptions' })\n"
+  },
+  {
+    "role": "practice_staff",
+    "page": "patient-detail",
+    "severity": "P0",
+    "kind": "routing",
+    "detail": "detail URL is still http://localhost:5173/ — no deep-link/history"
+  },
+  {
+    "role": "practice_staff",
+    "page": "walk",
+    "severity": "P0",
+    "kind": "crash",
+    "detail": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Prescriptions' })\n"
+  },
+  {
+    "role": "lab_admin",
+    "page": "refresh-on-detail",
+    "severity": "P0",
+    "kind": "refresh",
+    "detail": "was on 'RX000103 — Checked-In (via download)', after reload shows 'EasyRS'"
+  },
+  {
+    "role": "lab_tech",
+    "page": "refresh-on-detail",
+    "severity": "P0",
+    "kind": "refresh",
+    "detail": "was on 'RX000103 — Checked-In (via download)', after reload shows 'EasyRS'"
+  }
+]

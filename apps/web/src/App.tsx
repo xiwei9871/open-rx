@@ -1,27 +1,106 @@
-import { useState } from "react";
-import { login, logout, me, verify2fa, type Me } from "./api";
+import { useCallback, useEffect, useState } from "react";
+import { listNotifications, login, logout, me, verify2fa, type Me } from "./api";
 import PatientsPage from "./pages/Patients";
 import PatientDetailPage from "./pages/PatientDetail";
 import RxListPage from "./pages/RxList";
 import RxCreatePage from "./pages/RxCreate";
 import RxDetailPage from "./pages/RxDetail";
+import OrgSettingsPage from "./pages/OrgSettings";
+import InboxPage from "./pages/Inbox";
 
 type Route =
   | { name: "patients" } | { name: "patient"; id: string }
-  | { name: "rx" } | { name: "rx-new" } | { name: "rx-detail"; id: string };
+  | { name: "rx" } | { name: "rx-new" } | { name: "rx-detail"; id: string }
+  | { name: "settings" } | { name: "inbox" };
 
-const page = { fontFamily: "system-ui", maxWidth: 720, margin: "2rem auto" } as const;
-const input = { display: "block", width: "100%", marginBottom: 8, padding: 4 } as const;
+function routeToPath(r: Route): string {
+  switch (r.name) {
+    case "patients": return "/patients";
+    case "patient": return `/patients/${r.id}`;
+    case "rx": return "/rx";
+    case "rx-new": return "/rx/new";
+    case "rx-detail": return `/rx/${r.id}`;
+    case "inbox": return "/inbox";
+    case "settings": return "/settings";
+  }
+}
+
+function pathToRoute(path: string): Route | null {
+  const m = path.match(/^\/(patients|rx|inbox|settings)(?:\/([^/]+))?\/?$/);
+  if (!m) return null;
+  const [, section, id] = m;
+  if (section === "rx" && id === "new") return { name: "rx-new" };
+  if (section === "rx" && id) return { name: "rx-detail", id };
+  if (section === "patients" && id) return { name: "patient", id };
+  if (section === "patients") return { name: "patients" };
+  if (section === "rx") return { name: "rx" };
+  if (section === "inbox") return { name: "inbox" };
+  if (section === "settings") return { name: "settings" };
+  return null;
+}
+
+const defaultRoute = (u: Me): Route =>
+  u.org_kind === "lab" ? { name: "rx" }
+    : u.permissions.includes("patient:read") ? { name: "patients" }
+    : { name: "rx" };
 
 export default function App() {
   const [user, setUser] = useState<Me | null>(null);
-  const [route, setRoute] = useState<Route>({ name: "patients" });
+  const [booting, setBooting] = useState(true);
+  const [route, setRoute] = useState<Route>(() =>
+    pathToRoute(window.location.pathname) ?? { name: "patients" });
   // auth stages: credentials -> optional 2FA challenge -> authenticated
   const [challenge, setChallenge] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
+  const [unread, setUnread] = useState(0);
+
+  const navigate = useCallback((r: Route, replace = false) => {
+    const path = routeToPath(r);
+    if (path !== window.location.pathname) {
+      if (replace) window.history.replaceState(null, "", path);
+      else window.history.pushState(null, "", path);
+    }
+    setRoute(r);
+  }, []);
+
+  // Browser back/forward.
+  useEffect(() => {
+    const onPop = () => {
+      const r = pathToRoute(window.location.pathname);
+      if (r) setRoute(r);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // Session restore on reload — keeps the user on the deep-linked page.
+  // The readable hint cookie lets us skip the /auth/me probe (and its 401
+  // console noise) for visitors who were never signed in.
+  useEffect(() => {
+    const hinted = document.cookie.includes("easyrs_session_hint=");
+    if (!hinted) { setBooting(false); return; }
+    me().then(setUser).catch(() => {}).finally(() => setBooting(false));
+  }, []);
+
+  const refreshUnread = useCallback(async (u: Me) => {
+    try {
+      const r = await listNotifications();
+      setUnread(r.counts.unread);
+    } catch { /* badge is best-effort */ }
+    void u;
+  }, []);
+  useEffect(() => { if (user) void refreshUnread(user); },
+             [user, route, refreshUnread]);
+
+  async function afterAuth() {
+    const m = await me();
+    setUser(m);
+    const fromUrl = pathToRoute(window.location.pathname);
+    navigate(fromUrl ?? defaultRoute(m), true);
+  }
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -32,9 +111,7 @@ export default function App() {
         setChallenge(r.challenge_id);
         return;
       }
-      const m = await me();
-      setUser(m);
-      setRoute(m.org_kind === "lab" ? { name: "rx" } : { name: "patients" });
+      await afterAuth();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
     }
@@ -47,9 +124,7 @@ export default function App() {
       await verify2fa(challenge!, code);
       setChallenge(null);
       setCode("");
-      const m = await me();
-      setUser(m);
-      setRoute(m.org_kind === "lab" ? { name: "rx" } : { name: "patients" });
+      await afterAuth();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
     }
@@ -58,79 +133,110 @@ export default function App() {
   async function onLogout() {
     await logout();
     setUser(null);
+    window.history.pushState(null, "", "/");
     setRoute({ name: "patients" });
   }
 
-
+  if (booting) {
+    return <main className="container"><p className="empty">Loading…</p></main>;
+  }
 
   if (!user) {
     return (
-      <main style={page}>
-        <h1>EasyRS</h1>
+      <main className="container" style={{ maxWidth: 420 }}>
+        <h1 className="brand" style={{ fontSize: "1.8rem", margin: "2rem 0 1rem" }}>
+          EasyRS
+        </h1>
+        <div className="card">
         {challenge === null ? (
           <form onSubmit={onLogin}>
-            <label>Email
+            <label className="field"><span>Email</span>
               <input name="email" autoComplete="username" value={email}
-                onChange={(e) => setEmail(e.target.value)} style={input} />
+                onChange={(e) => setEmail(e.target.value)} />
             </label>
-            <label>Password
+            <label className="field"><span>Password</span>
               <input name="password" type="password" autoComplete="current-password"
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                style={input} />
+                value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
-            <button type="submit">Sign in</button>
-            {err && <p role="alert" style={{ color: "crimson" }}>{err}</p>}
+            <button type="submit" className="primary">Sign in</button>
+            {err && <p role="alert" className="alert">{err}</p>}
           </form>
         ) : (
           <form onSubmit={onVerify}>
             <p>Two-factor authentication required.</p>
-            <label>Authentication code
+            <label className="field"><span>Authentication code</span>
               <input name="totp" inputMode="numeric" autoComplete="one-time-code"
-                value={code} onChange={(e) => setCode(e.target.value)}
-                style={input} />
+                value={code} onChange={(e) => setCode(e.target.value)} />
             </label>
-            <button type="submit">Verify</button>
-            {err && <p role="alert" style={{ color: "crimson" }}>{err}</p>}
+            <button type="submit" className="primary">Verify</button>
+            {err && <p role="alert" className="alert">{err}</p>}
           </form>
         )}
+        </div>
       </main>
     );
   }
 
   const isPractice = user.org_kind !== "lab";
+  const canPatients = user.permissions.includes("patient:read");
+  const navSection =
+    route.name === "patient" ? "patients"
+    : route.name === "rx-detail" || route.name === "rx-new" ? "rx"
+    : route.name;
+  const navBtn = (r: Route, label: string, badge = 0) => (
+    <button type="button"
+      aria-current={navSection === r.name ? "page" : undefined}
+      onClick={() => navigate(r)}>
+      {label}{badge > 0 && <span className="badge">{badge}</span>}
+    </button>
+  );
+
+  // Guard: lab users / no patient:read land on rx list for patient URLs.
+  const effective =
+    (route.name === "patients" || route.name === "patient") && !canPatients
+      ? { name: "rx" } as Route : route;
 
   return (
-    <main style={page}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h1>EasyRS</h1>
-        <nav>
-          <span>{user.display_name} — {user.role} @ {user.org_name}</span>{" "}
-          {isPractice && route.name !== "patients" && (
-            <button onClick={() => setRoute({ name: "patients" })}>Patients</button>
-          )}
-          {route.name !== "rx" && (
-            <button onClick={() => setRoute({ name: "rx" })}>Prescriptions</button>
-          )}
-          <button onClick={onLogout}>Sign out</button>
+    <>
+      <header className="appbar">
+        <span className="brand">EasyRS</span>
+        <span className="whoami">
+          {user.display_name} — {user.role} @ {user.org_name}
+        </span>
+        <nav className="nav" aria-label="Primary">
+          {isPractice && canPatients && navBtn({ name: "patients" }, "Patients")}
+          {navBtn({ name: "rx" }, "Prescriptions")}
+          {navBtn({ name: "inbox" }, "Inbox", unread)}
+          {navBtn({ name: "settings" }, "Settings")}
+          <button type="button" onClick={onLogout}>Sign out</button>
         </nav>
       </header>
-      {route.name === "rx" ? (
+      <main className="container">
+      {effective.name === "rx" ? (
         <RxListPage me={user}
-          onOpen={(id) => setRoute({ name: "rx-detail", id })}
-          onNew={() => setRoute({ name: "rx-new" })} />
-      ) : route.name === "rx-new" ? (
+          onOpen={(id) => navigate({ name: "rx-detail", id })}
+          onNew={() => navigate({ name: "rx-new" })} />
+      ) : effective.name === "rx-new" ? (
         <RxCreatePage me={user}
-          onCreated={(id) => setRoute({ name: "rx-detail", id })}
-          onCancel={() => setRoute({ name: "rx" })} />
-      ) : route.name === "rx-detail" ? (
-        <RxDetailPage me={user} rxId={route.id}
-          onBack={() => setRoute({ name: "rx" })} />
-      ) : route.name === "patients" ? (
-        <PatientsPage me={user} onOpen={(id) => setRoute({ name: "patient", id })} />
+          onCreated={(id) => navigate({ name: "rx-detail", id })}
+          onCancel={() => navigate({ name: "rx" })} />
+      ) : effective.name === "rx-detail" ? (
+        <RxDetailPage me={user} rxId={effective.id}
+          onBack={() => navigate({ name: "rx" })} />
+      ) : effective.name === "inbox" ? (
+        <InboxPage me={user}
+          onOpenRx={(id) => navigate({ name: "rx-detail", id })} />
+      ) : effective.name === "settings" ? (
+        <OrgSettingsPage me={user} />
+      ) : effective.name === "patients" ? (
+        <PatientsPage me={user}
+          onOpen={(id) => navigate({ name: "patient", id })} />
       ) : (
-        <PatientDetailPage me={user} patientId={route.id}
-          onDeleted={() => setRoute({ name: "patients" })} />
+        <PatientDetailPage me={user} patientId={effective.id}
+          onDeleted={() => navigate({ name: "patients" })}
+          onOpenRx={(id) => navigate({ name: "rx-detail", id })} />
       )}
-    </main>
+      </main>
+    </>
   );
 }

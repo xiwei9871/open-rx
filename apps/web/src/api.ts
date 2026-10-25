@@ -29,6 +29,8 @@ const OrgSchema = z.object({
   name: z.string(),
   status: z.string(),
   timezone: z.string(),
+  default_doctor_id: z.string().nullable(),
+  default_location_id: z.string().nullable(),
   created_at: z.string(),
 });
 export type Org = z.infer<typeof OrgSchema>;
@@ -312,7 +314,18 @@ const RxSchema = z.object({
   submitted_at: z.string().nullable(),
   checked_in_at: z.string().nullable(),
   completed_at: z.string().nullable(),
+  carrier: z.string().nullable(),
+  tracking_number: z.string().nullable(),
+  shipped_at: z.string().nullable(),
+  received_at: z.string().nullable(),
+  delivered_at: z.string().nullable(),
+  qc_status: z.string(),
   created_at: z.string(),
+  patient_label: z.string().nullable().optional(),
+  practice_name: z.string().nullable().optional(),
+  lab_name: z.string().nullable().optional(),
+  doctor_name: z.string().nullable().optional(),
+  location_name: z.string().nullable().optional(),
   items: z.array(RxItemSchema).optional(),
 });
 export type Rx = z.infer<typeof RxSchema>;
@@ -358,6 +371,7 @@ const CommentSchema = z.object({
   body: z.string(),
   created_at: z.string(),
   parent_id: z.string().nullable(),
+  file_reference_id: z.string().nullable(),
 });
 export type RxComment = z.infer<typeof CommentSchema>;
 
@@ -371,14 +385,22 @@ const TransitionSchema = z.object({
 });
 export type RxTransition = z.infer<typeof TransitionSchema>;
 
-export async function listRx(status?: string): Promise<{ items: Rx[]; counts: Record<string, number> }> {
-  const u = status ? `/api/v1/rx?status=${encodeURIComponent(status)}` : "/api/v1/rx";
+export async function listRx(status?: string, opts?: {
+  fulfillmentStatus?: string; dueBefore?: string; labOrgId?: string;
+}): Promise<{ items: Rx[]; counts: Record<string, number> }> {
+  const qs = new URLSearchParams();
+  if (status) qs.set("status", status);
+  if (opts?.fulfillmentStatus) qs.set("fulfillment_status", opts.fulfillmentStatus);
+  if (opts?.dueBefore) qs.set("due_before", opts.dueBefore);
+  if (opts?.labOrgId) qs.set("lab_org_id", opts.labOrgId);
+  const u = `/api/v1/rx${qs.size ? `?${qs}` : ""}`;
   const r = await req(RxPageSchema, u);
   return { items: r.items, counts: r.counts };
 }
 
 export async function createRx(body: {
   patient_id: string; lab_org_id?: string | null; doctor_id?: string | null;
+  location_id?: string | null;
   due_date?: string | null; notes?: string | null;
 }): Promise<Rx> {
   return req(RxSchema, "/api/v1/rx", {
@@ -445,6 +467,15 @@ export async function checkInRx(id: string, version: number,
   });
 }
 
+export async function completeRx(id: string, version: number,
+                                 note?: string): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}/complete`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ note: note ?? null }),
+  });
+}
+
 const BundleDownloadSchema = z.object({
   bundle: z.object({ id: z.string(), sha256: z.string(),
                      bytes: z.number(), rx_version: z.number() }),
@@ -492,4 +523,272 @@ export async function listRoster(orgId: string): Promise<z.infer<typeof RosterSc
   const r = await req(z.object({ items: z.array(RosterSchema) }),
     `/api/v1/orgs/${orgId}/roster`);
   return r.items;
+}
+
+// ---------- M1: org admin / studio ----------
+
+export async function updateOrg(orgId: string, body: {
+  name?: string; timezone?: string;
+  default_doctor_id?: string | null; default_location_id?: string | null;
+}): Promise<Org> {
+  return req(OrgSchema, `/api/v1/orgs/${orgId}`, {
+    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+const LocationSchema = z.object({
+  id: z.string(), org_id: z.string(), name: z.string(),
+  address: z.string().nullable(), phone: z.string().nullable(),
+});
+export type Location = z.infer<typeof LocationSchema>;
+
+export async function listLocations(orgId: string): Promise<Location[]> {
+  const r = await req(z.object({ items: z.array(LocationSchema) }),
+    `/api/v1/orgs/${orgId}/locations`);
+  return r.items;
+}
+
+export async function createLocation(orgId: string, body: {
+  name: string; address?: string | null; phone?: string | null;
+}): Promise<Location> {
+  return req(LocationSchema, `/api/v1/orgs/${orgId}/locations`, {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function updateLocation(orgId: string, locationId: string, body: {
+  name?: string; address?: string | null; phone?: string | null;
+}): Promise<Location> {
+  return req(LocationSchema, `/api/v1/orgs/${orgId}/locations/${locationId}`, {
+    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function createRosterMember(orgId: string, body: {
+  kind: "doctor" | "staff"; display_name: string;
+  credentials?: string | null; is_default?: boolean;
+}): Promise<z.infer<typeof RosterSchema>> {
+  return req(RosterSchema, `/api/v1/orgs/${orgId}/roster`, {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function updateRosterMember(orgId: string, rosterId: string, body: {
+  display_name?: string; credentials?: string | null;
+  is_default?: boolean; status?: "active" | "disabled";
+}): Promise<z.infer<typeof RosterSchema>> {
+  return req(RosterSchema, `/api/v1/orgs/${orgId}/roster/${rosterId}`, {
+    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+const FullConnectionSchema = ConnectionSchema.extend({
+  initiated_by_org_id: z.string(),
+  decided_at: z.string().nullable(),
+  granted_scopes: z.array(z.string()),
+});
+export type FullConnection = z.infer<typeof FullConnectionSchema>;
+
+export async function listFullConnections(orgId: string): Promise<FullConnection[]> {
+  const r = await req(z.object({ items: z.array(FullConnectionSchema) }),
+    `/api/v1/org-connections?org_id=${orgId}`);
+  return r.items;
+}
+
+export async function requestConnection(practiceOrgId: string,
+                                        labOrgId: string): Promise<FullConnection> {
+  return req(FullConnectionSchema, "/api/v1/org-connections", {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ practice_org_id: practiceOrgId,
+                           lab_org_id: labOrgId, granted_scopes: [] }),
+  });
+}
+
+export async function decideConnection(connId: string, action: string,
+                                       version: number): Promise<FullConnection> {
+  return req(FullConnectionSchema, `/api/v1/org-connections/${connId}`, {
+    method: "PATCH", headers: JSON_HEADERS,
+    body: JSON.stringify({ action, expected_version: version }),
+  });
+}
+
+export async function changePassword(current: string,
+                                     next: string): Promise<void> {
+  await req204("/api/v1/auth/password", {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ old_password: current, new_password: next }),
+  });
+}
+
+const RxTemplateSchema = z.object({
+  id: z.string(), org_id: z.string(), name: z.string(),
+  payload: z.any(), created_at: z.string(),
+});
+export type RxTemplate = z.infer<typeof RxTemplateSchema>;
+
+export async function listRxTemplates(): Promise<RxTemplate[]> {
+  const r = await req(z.object({ items: z.array(RxTemplateSchema) }),
+    "/api/v1/templates");
+  return r.items;
+}
+
+export async function createRxTemplate(name: string,
+                                       payload: unknown): Promise<RxTemplate> {
+  return req(RxTemplateSchema, "/api/v1/templates", {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ name, payload }),
+  });
+}
+
+export async function deleteRxTemplate(id: string): Promise<void> {
+  await req204(`/api/v1/templates/${id}`, { method: "DELETE",
+                                              headers: JSON_HEADERS });
+}
+
+export async function listRxHistory(patientId: string): Promise<Rx[]> {
+  const r = await req(z.object({ items: z.array(RxSchema) }),
+    `/api/v1/patients/${patientId}/rx-history`);
+  return r.items;
+}
+
+// ---------- M2: notifications / approvals ----------
+
+const NotificationSchema = z.object({
+  id: z.string(), rx_id: z.string(), created_by_org_id: z.string(),
+  kind: z.string(), subject: z.string(), body: z.string().nullable(),
+  rx_version_at_creation: z.number().nullable(), status: z.string(),
+  resolved_at: z.string().nullable(), created_at: z.string(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
+const NotificationPageSchema = z.object({
+  items: z.array(NotificationSchema),
+  counts: z.object({ unread: z.number(), approval_pending: z.number() }),
+});
+
+export async function listNotifications(kind?: string, status?: string) {
+  const qs = [kind && `kind=${kind}`, status && `status=${status}`]
+    .filter(Boolean).join("&");
+  return req(NotificationPageSchema,
+    `/api/v1/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export async function createNotification(body: {
+  rx_id: string; kind: "info" | "ack_required" | "approval_required";
+  subject: string; body?: string;
+}): Promise<Notification> {
+  return req(NotificationSchema, "/api/v1/notifications", {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function markNotificationRead(id: string): Promise<Notification> {
+  return req(NotificationSchema, `/api/v1/notifications/${id}/read`,
+    { method: "POST", headers: JSON_HEADERS });
+}
+
+const ApprovalSchema = z.object({
+  id: z.string(), notification_id: z.string(), rx_id: z.string(),
+  rx_version: z.number(), decision: z.string(),
+  signature_name: z.string(), comment: z.string().nullable(),
+  decided_by_user_id: z.string(), decided_at: z.string(),
+});
+export type Approval = z.infer<typeof ApprovalSchema>;
+
+export async function decideNotification(id: string, body: {
+  decision: "approved" | "rejected"; signature_name: string;
+  comment?: string;
+}): Promise<Approval> {
+  return req(ApprovalSchema, `/api/v1/notifications/${id}/decision`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify(body),
+  });
+}
+
+const RxAttachmentSchema = z.object({
+  id: z.string(), asset_id: z.string(), role: z.string(),
+  asset: z.object({ id: z.string(), kind: z.string(), jaw: z.string(),
+                    bytes: z.number(), sha256: z.string(),
+                    format_status: z.string(), created_at: z.string() }),
+});
+export type RxAttachment = z.infer<typeof RxAttachmentSchema>;
+
+export async function listRxAttachments(rxId: string): Promise<RxAttachment[]> {
+  const r = await req(z.object({ items: z.array(RxAttachmentSchema) }),
+    `/api/v1/rx/${rxId}/attachments`);
+  return r.items;
+}
+
+export async function createRxCommentEx(rxId: string, body: string,
+                                        fileReferenceId?: string): Promise<RxComment> {
+  return req(CommentSchema, `/api/v1/rx/${rxId}/comments`, {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ body, file_reference_id: fileReferenceId ?? null }),
+  });
+}
+
+// ---------- M3: fulfillment ----------
+
+export async function recordRxQc(id: string, version: number,
+                                 result: "pass" | "fail",
+                                 note?: string): Promise<unknown> {
+  return req(z.object({ id: z.string(), result: z.string() }),
+    `/api/v1/rx/${id}/qc`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "If-Match": String(version) },
+      body: JSON.stringify({ result, note: note ?? null }),
+    });
+}
+
+export async function shipRx(id: string, version: number, carrier: string,
+                             trackingNumber: string, note?: string) {
+  return req(RxSchema, `/api/v1/rx/${id}/ship`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ carrier, tracking_number: trackingNumber,
+                           note: note ?? null }),
+  });
+}
+
+export async function receiveRx(id: string, version: number) {
+  return req(RxSchema, `/api/v1/rx/${id}/receive`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ note: null }),
+  });
+}
+
+export async function deliverRx(id: string, version: number) {
+  return req(RxSchema, `/api/v1/rx/${id}/deliver`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ note: null }),
+  });
+}
+
+const FulfillmentSchema = z.object({
+  qc: z.array(z.object({
+    id: z.string(), result: z.string(), note: z.string().nullable(),
+    checked_by_org_id: z.string(), created_at: z.string() })),
+  events: z.array(z.object({
+    id: z.string(), event: z.string(), note: z.string().nullable(),
+    actor_org_id: z.string(), created_at: z.string() })),
+});
+export type Fulfillment = z.infer<typeof FulfillmentSchema>;
+
+export async function getRxFulfillment(id: string): Promise<Fulfillment> {
+  return req(FulfillmentSchema, `/api/v1/rx/${id}/fulfillment`);
+}
+
+const DashboardSchema = z.object({
+  by_status: z.record(z.string(), z.number()),
+  by_fulfillment: z.record(z.string(), z.number()),
+  due_soon: z.array(RxSchema),
+  due_soon_hours: z.number(),
+});
+export type Dashboard = z.infer<typeof DashboardSchema>;
+
+export async function getDashboard(): Promise<Dashboard> {
+  return req(DashboardSchema, "/api/v1/dashboard");
 }
