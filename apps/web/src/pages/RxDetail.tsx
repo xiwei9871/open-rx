@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  checkInRx, completeRx, createNotification, createRxCommentEx,
-  downloadRxBundle, getRx,
+  checkInRx, completeRx, createNotification, createRxCommentEx, deliverRx,
+  downloadRxBundle, getRx, getRxFulfillment,
   listCatalog, listRxAttachments, listRxComments, listRxTransitions,
-  replaceRxItems, submitRx, unsubmitRx, updateRx,
-  type CatalogItem, type Me, type Rx, type RxAttachment, type RxComment,
-  type RxTransition,
+  receiveRx, recordRxQc, replaceRxItems, shipRx, submitRx, unsubmitRx,
+  updateRx,
+  type CatalogItem, type Fulfillment, type Me, type Rx, type RxAttachment,
+  type RxComment, type RxTransition,
 } from "../api";
 import StlPreview from "../components/StlPreview";
 
@@ -32,6 +33,9 @@ export default function RxDetail({ me, rxId, onBack }: {
   const [issueKind, setIssueKind] = useState<"info" | "ack_required" | "approval_required">("info");
   const [issueSubject, setIssueSubject] = useState("");
   const [issueBody, setIssueBody] = useState("");
+  const [ful, setFul] = useState<Fulfillment | null>(null);
+  const [carrier, setCarrier] = useState("");
+  const [tracking, setTracking] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editDue, setEditDue] = useState("");
   const [sig, setSig] = useState("");
@@ -48,6 +52,9 @@ export default function RxDetail({ me, rxId, onBack }: {
     setComments(cs);
     setTrail(ts);
     setAttachments(at);
+    if (r.status === "completed" || r.fulfillment_status !== "none") {
+      setFul(await getRxFulfillment(rxId));
+    }
     setEditNotes(r.notes ?? "");
     setEditDue(r.due_date ?? "");
   }
@@ -216,6 +223,69 @@ export default function RxDetail({ me, rxId, onBack }: {
             {previewId === a.asset_id && <StlPreview assetId={a.asset_id} />}
           </li>
         ))}</ul>
+      )}
+
+      {(rx.status === "completed" || rx.fulfillment_status !== "none") && (
+        <>
+          <h3>Fulfillment</h3>
+          <table><tbody>
+            <tr><td>Logistics</td><td data-testid="fulfillment-status">
+              {rx.fulfillment_status}</td></tr>
+            <tr><td>QC</td><td>{rx.qc_status}</td></tr>
+            <tr><td>Carrier</td><td>{rx.carrier ?? "—"}</td></tr>
+            <tr><td>Tracking</td><td>{rx.tracking_number ?? "—"}</td></tr>
+            <tr><td>Shipped</td><td>{rx.shipped_at?.slice(0, 19) ?? "—"}</td></tr>
+            <tr><td>Received</td><td>{rx.received_at?.slice(0, 19) ?? "—"}</td></tr>
+            <tr><td>Delivered</td><td>{rx.delivered_at?.slice(0, 19) ?? "—"}</td></tr>
+          </tbody></table>
+          <div style={{ display: "flex", gap: 8, alignItems: "center",
+                        flexWrap: "wrap", margin: "0.5rem 0" }}>
+            {isLab && (rx.fulfillment_status === "qc_pending" ||
+                       rx.fulfillment_status === "qc_passed") && (
+              <>
+                <button onClick={() => act(
+                  () => recordRxQc(rx.id, rx.version, "pass", "manual QC"),
+                  "QC passed recorded")}>QC pass</button>
+                <button onClick={() => act(
+                  () => recordRxQc(rx.id, rx.version, "fail", "manual QC"),
+                  "QC fail recorded")}>QC fail</button>
+              </>
+            )}
+            {isLab && rx.fulfillment_status === "qc_passed" && (
+              <>
+                <input aria-label="Carrier" placeholder="carrier"
+                       value={carrier}
+                       onChange={(e) => setCarrier(e.target.value)} />
+                <input aria-label="Tracking number" placeholder="tracking #"
+                       value={tracking}
+                       onChange={(e) => setTracking(e.target.value)} />
+                <button disabled={!carrier || !tracking}
+                  onClick={() => act(
+                    () => shipRx(rx.id, rx.version, carrier, tracking),
+                    "Shipped")}>Ship</button>
+              </>
+            )}
+            {!isLab && rx.fulfillment_status === "shipped" && (
+              <button onClick={() => act(
+                () => receiveRx(rx.id, rx.version),
+                "Received")}>Confirm receipt</button>
+            )}
+            {!isLab && rx.fulfillment_status === "received" && (
+              <button onClick={() => act(
+                () => deliverRx(rx.id, rx.version),
+                "Delivered")}>Confirm delivery</button>
+            )}
+          </div>
+          {ful && ful.events.length > 0 && (
+            <ul data-testid="fulfillment-events">
+              {ful.events.map((e) => (
+                <li key={e.id}>{e.event}
+                  {e.note && ` — ${e.note}`}
+                  <small> {e.created_at.slice(0, 19)}</small></li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <h3>Raise issue / request</h3>

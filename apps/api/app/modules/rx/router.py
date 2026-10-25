@@ -31,16 +31,20 @@ from app.modules.clinical.models import Patient, TreatmentCase
 from app.modules.iam.models import (Location, OrgConnection, Organization,
                                     RosterMember)
 from app.storage import s3, s3_presign
-from app.modules.rx.models import (Approval, CatalogItem, IdempotencyRecord,
-                                   Notification, Rx, RxBundle, RxComment,
-                                   RxItem, RxTemplate, RxTransition)
+from app.modules.rx.models import (Approval, CatalogItem, FulfillmentEvent,
+                                   IdempotencyRecord, Notification, QcRecord,
+                                   Rx, RxBundle, RxComment, RxItem, RxTemplate,
+                                   RxTransition)
 from app.modules.rx.schemas import (ApprovalOut, AttachmentCreate,
                                     CatalogItemOut, CommentCreate, CommentOut,
-                                    DecisionRequest, NotificationCreate,
-                                    NotificationOut, RxBundleOut, RxCheckIn,
-                                    RxCreate, RxItemOut, RxItemsReplace, RxOut,
-                                    RxSubmit, RxTemplateCreate, RxTemplateOut,
-                                    RxTransitionOut, RxUnsubmit, RxUpdate)
+                                    DecisionRequest, FulfillmentEventOut,
+                                    FulfillmentNote, NotificationCreate,
+                                    NotificationOut, QcRecordOut, QcRequest,
+                                    RxBundleOut, RxCheckIn, RxCreate,
+                                    RxItemOut, RxItemsReplace, RxOut, RxSubmit,
+                                    RxTemplateCreate, RxTemplateOut,
+                                    RxTransitionOut, RxUnsubmit, RxUpdate,
+                                    ShipRequest)
 
 router = APIRouter(tags=["prescriptions"])
 
@@ -276,6 +280,9 @@ async def list_rx(db: Db, p: Me, _g=Depends(require_perm("rx:read")),
                   location_id: uuid.UUID | None = None,
                   doctor_id: uuid.UUID | None = None,
                   tag_id: uuid.UUID | None = None,
+                  lab_org_id: uuid.UUID | None = None,
+                  fulfillment_status: str | None = None,
+                  due_before: str | None = None,
                   limit: int = 25, cursor: str | None = None):
     lim = min(max(limit, 1), 100)
     # Lab principals (no patient access) list their receiving inbox; practice
@@ -295,6 +302,12 @@ async def list_rx(db: Db, p: Me, _g=Depends(require_perm("rx:read")),
         conds.append(Rx.location_id == location_id)
     if doctor_id:
         conds.append(Rx.doctor_id == doctor_id)
+    if lab_org_id:
+        conds.append(Rx.lab_org_id == lab_org_id)
+    if fulfillment_status:
+        conds.append(Rx.fulfillment_status == fulfillment_status)
+    if due_before:
+        conds.append(Rx.due_date <= due_before)
     counts = dict((await db.execute(
         select(Rx.status, func.count()).where(*conds)
         .group_by(Rx.status))).all())
@@ -620,9 +633,13 @@ async def complete_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
     rx.status = "completed"
     rx.completed_at = datetime.now(UTC)
     rx.completed_by_user_id = p.user.id
+    # fulfillment track opens at clinical complete — QC gate next
+    rx.fulfillment_status = "qc_pending"
+    rx.qc_status = "pending"
     rx.version += 1
     _record_transition(db, p, rx, "checked_in", "completed", via="button",
                        note=(body or RxCheckIn()).note)
+    _fulfillment_event(db, p, rx, "completed")
     record(db, action="rx.completed", object_type="rx", object_id=rx.id,
            tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
            request=request)
@@ -1055,3 +1072,172 @@ async def decide_notification(notification_id: uuid.UUID, body: DecisionRequest,
            after={"decision": body.decision, "rx_version": rx.version})
     await tenant_commit(db, p)
     return ap
+
+
+# ---------------- fulfillment / delivery (M3) -------------------------------
+def _fulfillment_event(db: AsyncSession, p: Principal, rx: Rx, event: str,
+                       note: str | None = None) -> None:
+    db.add(FulfillmentEvent(tenant_id=p.tenant_id, rx_id=rx.id, event=event,
+                            actor_user_id=p.user.id, actor_org_id=p.org.id,
+                            note=note))
+
+
+@router.post("/rx/{rx_id}/qc", response_model=QcRecordOut, status_code=201,
+             operation_id="recordRxQc")
+async def record_rx_qc(rx_id: uuid.UUID, body: QcRequest, request: Request,
+                       db: Db, p: Me,
+                       _g=Depends(require_perm("rx:write")),
+                       if_match: int | None = Header(default=None)):
+    """Manual QC record on a completed order (lab side). A passing record
+    unlocks shipping; a failing record returns fulfillment to qc_pending."""
+    await limit_writes(p)
+    rx = await _rx_for_lab_write(db, p, rx_id, request)
+    _require_if_match(if_match, rx.version)
+    if rx.status != "completed":
+        raise _illegal("QC can only be recorded on completed orders")
+    rec = QcRecord(tenant_id=p.tenant_id, rx_id=rx.id, result=body.result,
+                   note=body.note, checked_by_user_id=p.user.id,
+                   checked_by_org_id=p.org.id)
+    db.add(rec)
+    rx.qc_status = body.result
+    rx.fulfillment_status = "qc_passed" if body.result == "pass" \
+        else "qc_pending"
+    rx.version += 1
+    _fulfillment_event(db, p, rx, f"qc_{body.result}", body.note)
+    await db.flush()
+    record(db, action="rx.qc_recorded", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request, after={"result": body.result})
+    await tenant_commit(db, p)
+    return rec
+
+
+@router.post("/rx/{rx_id}/ship", response_model=dict,
+             operation_id="shipRx")
+async def ship_rx(rx_id: uuid.UUID, body: ShipRequest, request: Request,
+                  db: Db, p: Me, _g=Depends(require_perm("rx:write")),
+                  if_match: int | None = Header(default=None)):
+    """LAB-019/FLOW-012: manual dispatch — carrier + tracking number by hand,
+    no carrier API. Requires a passing QC record."""
+    await limit_writes(p)
+    rx = await _rx_for_lab_write(db, p, rx_id, request)
+    if rx.fulfillment_status == "shipped" \
+            and rx.carrier == body.carrier \
+            and rx.tracking_number == body.tracking_number:
+        return await _rx_out(db, rx)  # idempotent repeat (same dispatch)
+    _require_if_match(if_match, rx.version)
+    if rx.status != "completed" or rx.fulfillment_status != "qc_passed":
+        raise _illegal("Order must be completed with QC passed before ship")
+    rx.fulfillment_status = "shipped"
+    rx.carrier = body.carrier
+    rx.tracking_number = body.tracking_number
+    rx.shipped_at = datetime.now(UTC)
+    rx.shipped_by_user_id = p.user.id
+    rx.version += 1
+    _fulfillment_event(db, p, rx, "shipped",
+                       body.note or f"{body.carrier} {body.tracking_number}")
+    record(db, action="rx.shipped", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request,
+           after={"carrier": body.carrier,
+                  "tracking_number": body.tracking_number})
+    await tenant_commit(db, p)
+    return await _rx_out(db, rx)
+
+
+@router.post("/rx/{rx_id}/receive", response_model=dict,
+             operation_id="receiveRx")
+async def receive_rx(rx_id: uuid.UUID, body: FulfillmentNote | None,
+                     request: Request, db: Db, p: Me,
+                     _g=Depends(require_perm("rx:write")),
+                     if_match: int | None = Header(default=None)):
+    """FLOW-013: practice confirms physical receipt of the shipment."""
+    await limit_writes(p)
+    rx = await _rx_for_practice_write(db, p, rx_id, request)
+    if rx.fulfillment_status in ("received", "delivered"):
+        return await _rx_out(db, rx)  # idempotent repeat
+    _require_if_match(if_match, rx.version)
+    if rx.fulfillment_status != "shipped":
+        raise _illegal("Only shipped orders can be received")
+    rx.fulfillment_status = "received"
+    rx.received_at = datetime.now(UTC)
+    rx.received_by_user_id = p.user.id
+    rx.version += 1
+    _fulfillment_event(db, p, rx, "received", (body or FulfillmentNote()).note)
+    record(db, action="rx.received", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request)
+    await tenant_commit(db, p)
+    return await _rx_out(db, rx)
+
+
+@router.post("/rx/{rx_id}/deliver", response_model=dict,
+             operation_id="deliverRx")
+async def deliver_rx(rx_id: uuid.UUID, body: FulfillmentNote | None,
+                     request: Request, db: Db, p: Me,
+                     _g=Depends(require_perm("rx:write")),
+                     if_match: int | None = Header(default=None)):
+    """FLOW-013: practice confirms delivery to the patient — terminal step
+    of the MVP loop."""
+    await limit_writes(p)
+    rx = await _rx_for_practice_write(db, p, rx_id, request)
+    if rx.fulfillment_status == "delivered":
+        return await _rx_out(db, rx)  # idempotent repeat
+    _require_if_match(if_match, rx.version)
+    if rx.fulfillment_status != "received":
+        raise _illegal("Only received orders can be marked delivered")
+    rx.fulfillment_status = "delivered"
+    rx.delivered_at = datetime.now(UTC)
+    rx.delivered_by_user_id = p.user.id
+    rx.version += 1
+    _fulfillment_event(db, p, rx, "delivered", (body or FulfillmentNote()).note)
+    record(db, action="rx.delivered", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request)
+    await tenant_commit(db, p)
+    return await _rx_out(db, rx)
+
+
+@router.get("/rx/{rx_id}/fulfillment", response_model=dict,
+            operation_id="getRxFulfillment")
+async def get_rx_fulfillment(rx_id: uuid.UUID, request: Request, db: Db,
+                             p: Me, _g=Depends(require_perm("rx:read"))):
+    """Full logistics trail: QC records + fulfillment events (FLOW-016)."""
+    await _rx_for_read(db, p, rx_id, request)
+    qc = (await db.execute(select(QcRecord).where(QcRecord.rx_id == rx_id)
+                           .order_by(QcRecord.created_at))).scalars().all()
+    ev = (await db.execute(select(FulfillmentEvent)
+                           .where(FulfillmentEvent.rx_id == rx_id)
+                           .order_by(FulfillmentEvent.seq))).scalars().all()
+    return {"qc": [QcRecordOut.model_validate(r) for r in qc],
+            "events": [FulfillmentEventOut.model_validate(e) for e in ev]}
+
+
+DUE_SOON_HOURS = 72  # FLOW-014: fixed threshold (configurable -> P1)
+
+
+@router.get("/dashboard", response_model=dict, operation_id="rxDashboard")
+async def rx_dashboard(db: Db, p: Me, _g=Depends(require_perm("rx:read"))):
+    """Lab/practice dashboard: counts by clinical + fulfillment status and
+    due-soon list (due within 72h, non-terminal)."""
+    if "patient:read" not in p.permissions:
+        base = [Rx.lab_org_id == p.org.id,
+                Rx.status.in_(LAB_VISIBLE_STATUSES)]
+    else:
+        base = [Rx.practice_org_id == p.org.id]
+    by_status = dict((await db.execute(
+        select(Rx.status, func.count()).where(*base)
+        .group_by(Rx.status))).all())
+    by_fulfillment = dict((await db.execute(
+        select(Rx.fulfillment_status, func.count()).where(*base)
+        .group_by(Rx.fulfillment_status))).all())
+    from datetime import date, timedelta
+    horizon = date.today() + timedelta(hours=DUE_SOON_HOURS)
+    due_soon = (await db.execute(
+        select(Rx).where(*base, Rx.due_date <= horizon,
+                         Rx.status.notin_(("completed", "cancelled")),
+                         Rx.fulfillment_status != "delivered")
+        .order_by(Rx.due_date))).scalars().all()
+    return {"by_status": by_status, "by_fulfillment": by_fulfillment,
+            "due_soon": [RxOut.model_validate(r) for r in due_soon],
+            "due_soon_hours": DUE_SOON_HOURS}

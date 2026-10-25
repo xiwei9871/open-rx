@@ -314,6 +314,12 @@ const RxSchema = z.object({
   submitted_at: z.string().nullable(),
   checked_in_at: z.string().nullable(),
   completed_at: z.string().nullable(),
+  carrier: z.string().nullable(),
+  tracking_number: z.string().nullable(),
+  shipped_at: z.string().nullable(),
+  received_at: z.string().nullable(),
+  delivered_at: z.string().nullable(),
+  qc_status: z.string(),
   created_at: z.string(),
   items: z.array(RxItemSchema).optional(),
 });
@@ -374,8 +380,15 @@ const TransitionSchema = z.object({
 });
 export type RxTransition = z.infer<typeof TransitionSchema>;
 
-export async function listRx(status?: string): Promise<{ items: Rx[]; counts: Record<string, number> }> {
-  const u = status ? `/api/v1/rx?status=${encodeURIComponent(status)}` : "/api/v1/rx";
+export async function listRx(status?: string, opts?: {
+  fulfillmentStatus?: string; dueBefore?: string; labOrgId?: string;
+}): Promise<{ items: Rx[]; counts: Record<string, number> }> {
+  const qs = new URLSearchParams();
+  if (status) qs.set("status", status);
+  if (opts?.fulfillmentStatus) qs.set("fulfillment_status", opts.fulfillmentStatus);
+  if (opts?.dueBefore) qs.set("due_before", opts.dueBefore);
+  if (opts?.labOrgId) qs.set("lab_org_id", opts.labOrgId);
+  const u = `/api/v1/rx${qs.size ? `?${qs}` : ""}`;
   const r = await req(RxPageSchema, u);
   return { items: r.items, counts: r.counts };
 }
@@ -708,4 +721,69 @@ export async function createRxCommentEx(rxId: string, body: string,
     method: "POST", headers: JSON_HEADERS,
     body: JSON.stringify({ body, file_reference_id: fileReferenceId ?? null }),
   });
+}
+
+// ---------- M3: fulfillment ----------
+
+export async function recordRxQc(id: string, version: number,
+                                 result: "pass" | "fail",
+                                 note?: string): Promise<unknown> {
+  return req(z.object({ id: z.string(), result: z.string() }),
+    `/api/v1/rx/${id}/qc`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "If-Match": String(version) },
+      body: JSON.stringify({ result, note: note ?? null }),
+    });
+}
+
+export async function shipRx(id: string, version: number, carrier: string,
+                             trackingNumber: string, note?: string) {
+  return req(RxSchema, `/api/v1/rx/${id}/ship`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ carrier, tracking_number: trackingNumber,
+                           note: note ?? null }),
+  });
+}
+
+export async function receiveRx(id: string, version: number) {
+  return req(RxSchema, `/api/v1/rx/${id}/receive`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ note: null }),
+  });
+}
+
+export async function deliverRx(id: string, version: number) {
+  return req(RxSchema, `/api/v1/rx/${id}/deliver`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ note: null }),
+  });
+}
+
+const FulfillmentSchema = z.object({
+  qc: z.array(z.object({
+    id: z.string(), result: z.string(), note: z.string().nullable(),
+    checked_by_org_id: z.string(), created_at: z.string() })),
+  events: z.array(z.object({
+    id: z.string(), event: z.string(), note: z.string().nullable(),
+    actor_org_id: z.string(), created_at: z.string() })),
+});
+export type Fulfillment = z.infer<typeof FulfillmentSchema>;
+
+export async function getRxFulfillment(id: string): Promise<Fulfillment> {
+  return req(FulfillmentSchema, `/api/v1/rx/${id}/fulfillment`);
+}
+
+const DashboardSchema = z.object({
+  by_status: z.record(z.string(), z.number()),
+  by_fulfillment: z.record(z.string(), z.number()),
+  due_soon: z.array(RxSchema),
+  due_soon_hours: z.number(),
+});
+export type Dashboard = z.infer<typeof DashboardSchema>;
+
+export async function getDashboard(): Promise<Dashboard> {
+  return req(DashboardSchema, "/api/v1/dashboard");
 }

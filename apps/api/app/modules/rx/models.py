@@ -77,6 +77,24 @@ class Rx(Base, IdMixin, CreatedAtMixin):
         DateTime(timezone=True), nullable=True)
     completed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
+    # M3 fulfillment (logistics track — separate from clinical status)
+    carrier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(String(120),
+                                                      nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    shipped_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
+    received_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    received_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    delivered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
+    qc_status: Mapped[str] = mapped_column(String(16), default="none",
+                                           server_default="none")
     signature_name: Mapped[str | None] = mapped_column(String(200),
                                                        nullable=True)
     # exact version the submit signature binds (persisted — Final Gate F1)
@@ -241,3 +259,33 @@ class Approval(Base, IdMixin, CreatedAtMixin):
     decided_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("user_account.id"))
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class QcRecord(Base, IdMixin, CreatedAtMixin):
+    """FLOW-016: append-only manual QC confirmations (production quality
+    check before dispatch). result: pass|fail."""
+    __tablename__ = "qc_record"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    rx_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rx.id"), index=True)
+    result: Mapped[str] = mapped_column(String(8))
+    note: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    checked_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    checked_by_org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id"))
+
+
+class FulfillmentEvent(Base, IdMixin, CreatedAtMixin):
+    """Logistics trail — seq-ordered like rx_transition (FLOW-016)."""
+    __tablename__ = "fulfillment_event"
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    rx_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rx.id"), index=True)
+    event: Mapped[str] = mapped_column(String(24))
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    actor_org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id"))
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)

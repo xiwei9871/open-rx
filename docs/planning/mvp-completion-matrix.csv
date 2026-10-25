@@ -10,19 +10,19 @@ COM-001,TASK-0019,CORE,VERIFIED,GET/POST /rx/{id}/comments; POST body file_refer
 COM-002,TASK-0020,CORE,VERIFIED,POST /notifications; GET /notifications,Inbox page,notification (0010),test_collab.py issue-flow+isolation; collab.spec.ts,,M2
 COM-004,TASK-0020,CORE,VERIFIED,POST /notifications kind=approval_required; POST /notifications/{id}/decision,Inbox approve/reject + signature,notification.rx_version_at_creation + approval (0010),test_collab.py approval loop/replay/version_drift; collab.spec.ts,,M2
 COM-007,TASK-0019,CORE,VERIFIED,"GET /notifications w/ counts{unread,approval_pending} + kind/status filters",Inbox page w/ todo counts,notification (0010),test_collab.py inbox counts; collab.spec.ts,,M2
-FLOW-001,TASK-0017,CORE,PARTIAL,GET /rx returns status counts,RxList plain list (no dashboard),rx.status (0005),test_rx.py list,status/date/lab dashboards for both realms,M3
-FLOW-002,TASK-0017,CORE,PARTIAL,GET /rx ?status&date_from&date_to&location&doctor,no UI filter controls,—,test_rx.py list filters,UI filter controls,M3
-FLOW-003,TASK-0017,SIMPLIFY,PARTIAL,status/date/lab subset filters exist,no UI filter controls,—,test_rx.py,UI for subset (status/date/lab),M3
+FLOW-001,TASK-0017,CORE,VERIFIED,GET /dashboard (by_status+by_fulfillment+due_soon),RxList dashboard strip (both realms),rx cols (0005/0011),test_fulfill.py dashboard,,M3
+FLOW-002,TASK-0017,CORE,VERIFIED,GET /rx ?status&date_*&lab_org_id&fulfillment_status&due_before,RxList status/fulfillment/due filters,—,test_rx.py + test_fulfill.py filters,,M3
+FLOW-003,TASK-0017,SIMPLIFY,VERIFIED,subset filters shipped (status/date/lab),RxList filters,—,test_fulfill.py test_list_filters,,M3
 FLOW-005,TASK-0015,CORE,VERIFIED,GET /rx + draft/submitted status split,RxList,rx.status (0005),test_rx.py,,
 FLOW-006,TASK-0015,CORE,VERIFIED,POST /rx/{id}/check-in + bundle-download check-in,RxDetail Check-in + Download&Check-in,rx.status+checked_in_via (0005/0006),test_rx.py + s1b1 + e2e,,
 FLOW-008,TASK-0015,CORE,VERIFIED,unsubmit -> 409 already_checked_in,RxDetail error path,rx.status (0005),test_rx.py + finalgate + e2e,,
 FLOW-009,TASK-0015,CORE,VERIFIED,POST /unsubmit -> draft (submitted only),RxDetail Unsubmit,rx.status (0005),test_rx.py,,
 FLOW-010,TASK-0015,CORE,VERIFIED,POST /rx/{id}/attachments allowed post-submit,RxDetail attach,FileReference subject rx (0003),test_rx.py post-submit attach,,
 FLOW-011,TASK-0015,CORE,VERIFIED,"POST /rx/{id}/complete (checked_in->completed, lab-only, If-Match, idempotent)",RxDetail 'Mark complete',rx.completed_at/completed_by_user_id (0010),test_collab.py complete+practice-denied; collab.spec.ts,,M2
-FLOW-012,TASK-0016,MANUAL,MISSING,—,—,—,—,manual carrier + tracking-number entry on ship,M3
-FLOW-013,TASK-0016,CORE,MISSING,—,—,—,—,shipped->received->delivered distinct states (E2E-10),M3
-FLOW-014,TASK-0017,SIMPLIFY,MISSING,—,—,—,—,fixed due-soon threshold highlight + ordering,M3
-FLOW-016,TASK-0015,CORE,PARTIAL,GET /rx/{id}/transitions append-only log,RxDetail history section,rx_transition+seq (0005/0007),test_rx.py transitions + test_collab approval via=approval events,QC/fulfillment events pending M3,M2-M3
+FLOW-012,TASK-0016,MANUAL,VERIFIED,"POST /rx/{id}/ship {carrier,tracking_number}",RxDetail ship form,rx.carrier/tracking_number/shipped_* (0011),test_fulfill.py loop+qc-gate; fulfill.spec.ts,,M3
+FLOW-013,TASK-0016,CORE,VERIFIED,POST /rx/{id}/receive + /deliver (practice),RxDetail confirm receipt/delivery,rx.received_*/delivered_* (0011),test_fulfill.py loop+perms; fulfill.spec.ts E2E-10 backbone,,M3
+FLOW-014,TASK-0017,SIMPLIFY,VERIFIED,GET /dashboard due_soon (fixed 72h),RxList due-soon chip + due_before filter,—,test_fulfill.py dashboard due_soon + due_soon_hours,,M3
+FLOW-016,TASK-0015,CORE,VERIFIED,GET /rx/{id}/transitions + /fulfillment (seq-ordered),RxDetail history + fulfillment event list,rx_transition seq + fulfillment_event + qc_record (0007/0011),test_rx.py + test_fulfill.py event order,,M3
 IAM-001,TASK-0001,CORE,VERIFIED,PATCH /orgs/{id} incl defaults+tz,OrgSettings Profile&defaults,org.default_*+timezone (0009),test_studio.py + studio.spec.ts,,DONE:M1
 IAM-002,TASK-0001,CORE,VERIFIED,PATCH /orgs/{id}/locations/{lid},OrgSettings Locations,location (0001),test_studio.py + studio.spec.ts,,DONE:M1
 IAM-003,TASK-0003,CORE,VERIFIED,roster PATCH + org.default_doctor_id,OrgSettings Roster + RxCreate prefill,roster_member+org.default (0009),test_studio.py default exclusivity,,DONE:M1
@@ -37,7 +37,7 @@ INT-005,TASK-0013,CORE,VERIFIED,generic upload session = scanner import path,Pat
 INT-011,TASK-0047,SIMPLIFY,VERIFIED,OpenAPI v1 contract published,—,docs/api/openapi.yaml,test_contract.py drift gate,,
 LAB-001,TASK-0033,CORE,VERIFIED,check-in button + download-triggered,RxDetail lab actions,rx.status+checked_in_via (0005),test_rx.py + e2e,,
 LAB-002,TASK-0033,CORE,VERIFIED,POST /notifications (lab->practice) + decision loop,RxDetail raise-issue; Inbox decision,notification+approval (0010),test_collab.py + collab.spec.ts,,M2
-LAB-019,TASK-0038,MANUAL,MISSING,—,—,—,—,manual receive/dispatch registration,M3
+LAB-019,TASK-0038,MANUAL,VERIFIED,POST /rx/{id}/ship|receive|deliver manual registration; carrier/tracking by hand,RxDetail fulfillment controls per party,rx ship/receive/deliver cols (0011),test_fulfill.py perms+loop; fulfill.spec.ts,,M3
 PAT-001,TASK-0005,CORE,VERIFIED,POST /patients,Patients create form,patient (0003),test_patients.py + patients.spec.ts,,
 PAT-002,TASK-0005,CORE,VERIFIED,GET /patients?q= + dup hint,debounced as-you-type + dup banner,patient (0003),test_patients.py + e2e,,DONE:M1
 PAT-003,TASK-0005,CORE,VERIFIED,patient.external_ref indexed,Patients form field,patient.external_ref (0003),test_patients.py,,

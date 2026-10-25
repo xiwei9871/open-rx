@@ -37,6 +37,9 @@ REQUIRED_SPEC_OPS = {
     # M2: notifications / approvals
     "listNotifications", "createNotification", "markNotificationRead",
     "decideNotification", "completeRx",
+    # M3: fulfillment
+    "recordRxQc", "shipRx", "receiveRx", "deliverRx", "getRxFulfillment",
+    "rxDashboard",
 }
 EXTRA_AUTH_OPS = {
     "login", "verifyTwoFA", "logout", "me",

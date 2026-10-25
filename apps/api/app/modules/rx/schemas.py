@@ -96,6 +96,48 @@ class RxOut(BaseModel):
     submitted_at: datetime | None
     checked_in_at: datetime | None
     completed_at: datetime | None
+    carrier: str | None
+    tracking_number: str | None
+    shipped_at: datetime | None
+    received_at: datetime | None
+    delivered_at: datetime | None
+    qc_status: str
+    created_at: datetime
+
+
+class QcRequest(BaseModel):
+    result: str = Field(pattern="^(pass|fail)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ShipRequest(BaseModel):
+    carrier: str = Field(min_length=1, max_length=120)
+    tracking_number: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class FulfillmentNote(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class QcRecordOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    rx_id: uuid.UUID
+    result: str
+    note: str | None
+    checked_by_user_id: uuid.UUID
+    checked_by_org_id: uuid.UUID
+    created_at: datetime
+
+
+class FulfillmentEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    event: str
+    actor_user_id: uuid.UUID
+    actor_org_id: uuid.UUID
+    note: str | None
     created_at: datetime
 
 

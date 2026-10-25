@@ -610,6 +610,114 @@ paths:
         "403": {$ref: "#/components/responses/Forbidden"}
         "409": {$ref: "#/components/responses/VersionConflict"}
         "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/qc:
+    post:
+      tags: [prescriptions]
+      operationId: recordRxQc
+      summary: "Manual QC record on a completed order (lab). pass unlocks ship; fail returns to qc_pending — M3"
+      x-scope: receiving lab member
+      x-state-transition: "fulfillment: qc_pending <-> qc_passed (clinical status unchanged)"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result: {type: string, enum: [pass, fail]}
+                note: {type: [string, "null"], maxLength: 2000}
+      responses:
+        "201": {description: "QC record persisted"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/ship:
+    post:
+      tags: [prescriptions]
+      operationId: shipRx
+      summary: "Manual dispatch — carrier + tracking number entered by hand (LAB-019/FLOW-012); no carrier API. Requires QC pass"
+      x-scope: receiving lab member
+      x-state-transition: "fulfillment: qc_passed -> shipped"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrier, tracking_number]
+              properties:
+                carrier: {type: string, maxLength: 120}
+                tracking_number: {type: string, maxLength: 120}
+                note: {type: [string, "null"], maxLength: 500}
+      responses:
+        "200": {description: "Shipped", content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/receive:
+    post:
+      tags: [prescriptions]
+      operationId: receiveRx
+      summary: "Practice confirms physical receipt (FLOW-013 / E2E-10)"
+      x-scope: issuing practice member
+      x-idempotent: "repeat returns current state"
+      x-state-transition: "fulfillment: shipped -> received"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200": {description: "Received", content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/deliver:
+    post:
+      tags: [prescriptions]
+      operationId: deliverRx
+      summary: "Practice confirms delivery to patient — terminal step (FLOW-013 / E2E-10)"
+      x-scope: issuing practice member
+      x-idempotent: "repeat returns current state"
+      x-state-transition: "fulfillment: received -> delivered"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200": {description: "Delivered", content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/fulfillment:
+    get:
+      tags: [prescriptions]
+      operationId: getRxFulfillment
+      summary: "Full logistics trail — QC records + seq-ordered fulfillment events (FLOW-016)"
+      x-scope: issuing practice member | receiving lab (visible rx)
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200": {description: "QC records + events"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /dashboard:
+    get:
+      tags: [prescriptions]
+      operationId: rxDashboard
+      summary: "Lab/practice dashboard — counts by clinical + fulfillment status, due-soon list (fixed 72h threshold, FLOW-014)"
+      x-scope: rx:read
+      responses:
+        "200": {description: "Dashboard aggregates"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /rx/{rxId}/bundle:
     get:
       tags: [prescriptions]
