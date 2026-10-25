@@ -47,6 +47,9 @@ jobs:
           set -e
           ! git ls-files | grep -iE '\.(stl|dcm|dicom)$' || { echo "banned file type committed"; exit 1; }
 
+      - name: MVP acceptance matrix check
+        run: python3 tools/mvp_acceptance.py
+
   api-tests:
     runs-on: ubuntu-24.04
     services:

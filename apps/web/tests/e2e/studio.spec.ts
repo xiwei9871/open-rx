@@ -35,8 +35,10 @@ test.describe("M1 studio", () => {
     await page.getByRole("button", { name: "Prescriptions" }).click();
     await page.getByRole("button", { name: "New Rx" }).click();
 
-    // required selects
-    await page.locator("select[name=patient]").selectOption({ label: "Synthetic, Ava (P000001)" });
+    // required selects (patient_number is sequence-generated — match by name)
+    const patientOpt = page.locator("select[name=patient] option", { hasText: "Synthetic, Ava" });
+    const patientValue = await patientOpt.getAttribute("value");
+    await page.locator("select[name=patient]").selectOption({ value: patientValue! });
     await page.locator("select[name=lab]").selectOption({ index: 1 });
     await page.locator("select[name=catalog]").selectOption({ index: 1 });
     await page.getByRole("button", { name: "Add" }).click();
