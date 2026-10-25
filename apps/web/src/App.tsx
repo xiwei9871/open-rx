@@ -218,6 +218,8 @@ export default function App() {
           onNew={() => navigate({ name: "rx-new" })} />
       ) : effective.name === "rx-new" ? (
         <RxCreatePage me={user}
+          initialPatientId={new URLSearchParams(window.location.search)
+            .get("patient") ?? undefined}
           onCreated={(id) => navigate({ name: "rx-detail", id })}
           onCancel={() => navigate({ name: "rx" })} />
       ) : effective.name === "rx-detail" ? (
@@ -234,7 +236,11 @@ export default function App() {
       ) : (
         <PatientDetailPage me={user} patientId={effective.id}
           onDeleted={() => navigate({ name: "patients" })}
-          onOpenRx={(id) => navigate({ name: "rx-detail", id })} />
+          onOpenRx={(id) => navigate({ name: "rx-detail", id })}
+          onNewRx={(pid) => {
+            window.history.pushState(null, "", `/rx/new?patient=${pid}`);
+            setRoute({ name: "rx-new" });
+          }} />
       )}
       </main>
     </>

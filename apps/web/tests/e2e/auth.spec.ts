@@ -35,30 +35,12 @@ test.describe("auth flow", () => {
     expect(me.status()).toBe(401);
   });
 
-  test("2FA-enabled user completes the challenge in the browser", async ({ page, request }) => {
-    // doctor@pa.dev — NOT the shared admin account, so enabling TOTP here
-    // never contaminates the other specs' plain-login flow.
-    const DOCTOR = { email: "doctor@pa.dev", password: "Passw0rd!dev" };
-    const api = request;
-    await api.post("/api/v1/auth/login", {
-      data: { email: DOCTOR.email, password: DOCTOR.password },
-      headers: { "X-Requested-With": "XMLHttpRequest" },
-    });
-    const setup = await api.post("/api/v1/auth/2fa/setup",
-      { headers: { "X-Requested-With": "XMLHttpRequest" } });
-    expect(setup.status()).toBe(200);
-    const { secret } = await setup.json();
-    const enable = await api.post("/api/v1/auth/2fa/enable", {
-      data: { secret, code: totp(secret) },
-      headers: { "X-Requested-With": "XMLHttpRequest" },
-    });
-    expect(enable.status()).toBe(204);
-    await api.post("/api/v1/auth/logout",
-      { headers: { "X-Requested-With": "XMLHttpRequest" } });
-
+  test("2FA-enabled user completes the challenge in the browser", async ({ page }) => {
+    // mfa@pa.dev is pre-enrolled in the seed with a fixed synthetic TOTP
+    // secret, so this spec stays green on reruns (no shared-account mutation).
     await page.goto("/");
-    await page.getByLabel("Email").fill(DOCTOR.email);
-    await page.getByLabel("Password").fill(DOCTOR.password);
+    await page.getByLabel("Email").fill("mfa@pa.dev");
+    await page.getByLabel("Password").fill("Passw0rd!dev");
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page.getByLabel("Authentication code")).toBeVisible();
@@ -66,9 +48,10 @@ test.describe("auth flow", () => {
     await page.getByLabel("Authentication code").fill("000000");
     await page.getByRole("button", { name: "Verify" }).click();
     await expect(page.getByRole("alert")).toBeVisible();
-    await page.getByLabel("Authentication code").fill(totp(secret));
+    await page.getByLabel("Authentication code")
+      .fill(totp("JBSWY3DPEHPK3PXP"));
     await page.getByRole("button", { name: "Verify" }).click();
-    await expect(page.getByText("Dr. Demo")).toBeVisible();
+    await expect(page.getByText("MFA Doc")).toBeVisible();
   });
 
   test("logout clears session + hint cookies; deep link denied; no revive", async ({ page, context }) => {

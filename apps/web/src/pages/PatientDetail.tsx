@@ -8,9 +8,10 @@ import {
 import StlPreview from "../components/StlPreview";
 import { fmtDate, saveAs, statusLabel, useActionLock } from "../lib";
 
-export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }: {
+export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx, onNewRx }: {
   me: Me; patientId: string; onDeleted: () => void;
   onOpenRx?: (rxId: string) => void;
+  onNewRx?: (patientId: string) => void;
 }) {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [cases, setCases] = useState<Case[]>([]);
@@ -171,7 +172,15 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
       </div>
 
       <div className="card">
-      <h3>Prescription history</h3>
+      <div className="row spread">
+        <h3>Prescription history</h3>
+        {onNewRx && me.permissions.includes("rx:write") && (
+          <button type="button" className="small primary"
+                  onClick={() => onNewRx(patientId)}>
+            New Rx for this patient
+          </button>
+        )}
+      </div>
       {rxHistory.length === 0 ? <p className="empty">No prescriptions.</p> : (
         <ul>{rxHistory.map((r) => (
           <li key={r.id}>

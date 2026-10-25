@@ -1,0 +1,12 @@
+page,score,task_clarity,form_legibility,error_feedback,context,density,mobile,issue,severity,suggestion,next_round
+Login,5,clear,simple,alert-shown,n/a,light,ok,-,-,-,no
+Patient list,4,clear,search-box,alerts,refs+counts,ok,ok,-,-,-,no
+Patient detail,4,clear,sectioned,alerts,cases+files+rx history,ok,ok,-,-,-,no
+Treatment case area,4,clear,label+stage,alerts,per-patient,light,ok,-,-,-,no
+Files/STL area,4,clear,upload-flow,alerts+format_status,bytes+sha shown,ok,ok,-,-,-,no
+Rx list,4,clear,filters,alerts,stat cards,ok,ok,"first page only, no pagination",P2,"cursor pagination + saved filters",yes
+Rx create,3,mostly-clear,"all controls labelled, filter needed",alerts,"case select only after patient",medium,ok,"patient select unusable at >25 rows before fix; still no inline hints for due-date format",P1-resolved/P2,"keep filter; add per-field hints + sensible defaults",yes
+Rx detail,4,clear,grouped-sections,readable-errors,items+attachments+comments+history,dense,ok,"very tall page; no in-section anchors",P3,"anchor nav or tabs",maybe
+Lab inbox,4,clear,list,alerts,rx-number+patient+status,ok,ok,"no due-date sort hint",P3,"default sort by due date",maybe
+Notifications/approvals,4,clear,decision-form,readable,inbox counts,ok,ok,"approval version context implicit",P3,"surface rx_version on the decision card",maybe
+Fulfillment area,4,clear,qc/ship/receive/deliver,readable,status pills+timestamps,ok,ok,"carrier/tracking unlabelled pair",P3,"label both inputs explicitly",maybe

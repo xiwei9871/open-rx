@@ -14,7 +14,7 @@ from app.db import admin_session
 from app.modules.iam.models import (
     Membership, OrgConnection, Organization, RosterMember, Tenant, UserAccount,
 )
-from app.security import hash_password
+from app.security import enc_totp, hash_password
 
 PASSWORD = "Passw0rd!dev"
 USERS = [
@@ -23,7 +23,15 @@ USERS = [
     ("staff@pa.dev", "PA Staff", "practice_staff", "PA"),
     ("admin@la.dev", "LA Admin", "lab_admin", "LA"),
     ("tech@la.dev", "LA Tech", "lab_technician", "LA"),
+    # UAT: a principal on the UNCONNECTED lab org (LB) — used to prove
+    # cross-org denial; LB has no OrgConnection to PA.
+    ("lab2@lb.dev", "LB Tech", "lab_technician", "LB"),
+    # UAT: pre-enrolled TOTP user so 2FA browser tests are idempotent —
+    # no test needs to mutate another account's 2FA state. Secret is a
+    # well-known RFC test vector, synthetic only.
+    ("mfa@pa.dev", "MFA Doc", "practice_doctor", "PA"),
 ]
+TOTP_SEED_SECRET = "JBSWY3DPEHPK3PXP"
 
 
 async def seed() -> None:
@@ -66,6 +74,9 @@ async def seed() -> None:
                     Membership.user_id == user.id))).scalar_one_or_none():
                 db.add(Membership(tenant_id=tenant.id, org_id=orgs[code].id,
                                   user_id=user.id, role=role, status="active"))
+            if email == "mfa@pa.dev" and not user.totp_enabled:
+                user.totp_secret_enc = enc_totp(TOTP_SEED_SECRET)
+                user.totp_enabled = True
 
         if not (await db.execute(select(OrgConnection).where(
                 OrgConnection.practice_org_id == orgs["PA"].id,

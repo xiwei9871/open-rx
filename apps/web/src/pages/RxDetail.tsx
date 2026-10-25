@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  checkInRx, completeRx, createNotification, createRxCommentEx, deliverRx,
-  downloadRxBundle, getRx, getRxFulfillment,
-  listCatalog, listRxAttachments, listRxComments, listRxTransitions,
-  receiveRx, recordRxQc, replaceRxItems, shipRx, submitRx, unsubmitRx,
-  updateRx,
-  type CatalogItem, type Fulfillment, type Me, type Rx, type RxAttachment,
-  type RxComment, type RxTransition,
+  attachToRx, checkInRx, completeRx, createNotification,
+  createRxCommentEx, deliverRx, downloadRxBundle, getRx, getRxFulfillment,
+  listCatalog, listPatientAssets, listRxAttachments, listRxComments,
+  listRxTransitions, receiveRx, recordRxQc, replaceRxItems, shipRx,
+  submitRx, unsubmitRx, updateRx,
+  type CatalogItem, type Fulfillment, type Me, type PatientAsset,
+  type Rx, type RxAttachment, type RxComment, type RxTransition,
 } from "../api";
 import {
   fmtDate, fmtDateTime, fulfillmentLabel, QC_LABELS, saveAs, statusLabel,
@@ -45,6 +45,10 @@ export default function RxDetail({ me, rxId, onBack }: {
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const [patientAssets, setPatientAssets] = useState<PatientAsset[]>([]);
+  const [attachPick, setAttachPick] = useState("");
+  const [attachRole, setAttachRole] =
+    useState<"original" | "attachment">("original");
 
   async function reload() {
     const [r, cs, ts, at] = await Promise.all([
@@ -56,6 +60,11 @@ export default function RxDetail({ me, rxId, onBack }: {
     setAttachments(at);
     if (r.status === "completed" || r.fulfillment_status !== "none") {
       setFul(await getRxFulfillment(rxId));
+    }
+    // Practice side: patient files eligible to bind into this Rx.
+    if (me.org_kind !== "lab" && me.permissions.includes("rx:write")) {
+      setPatientAssets(await listPatientAssets(r.patient_id)
+        .catch(() => []));
     }
     setEditNotes(r.notes ?? "");
     setEditDue(r.due_date ?? "");
@@ -275,6 +284,46 @@ export default function RxDetail({ me, rxId, onBack }: {
 
       <div className="card">
         <h3>Attachments</h3>
+        {!isLab && me.permissions.includes("rx:write") && (() => {
+          const attached = new Set(attachments.map((a) => a.asset_id));
+          const eligible = patientAssets.filter(
+            (a) => a.asset.format_status === "format_ok"
+                && !attached.has(a.asset_id));
+          return eligible.length > 0 ? (
+            <div className="row" style={{ marginBottom: "0.6rem" }}>
+              <label className="field grow" style={{ marginBottom: 0 }}>
+                <span>Attach a patient file</span>
+                <select aria-label="Patient file" value={attachPick}
+                        onChange={(e) => setAttachPick(e.target.value)}>
+                  <option value="">— select file —</option>
+                  {eligible.map((a) => (
+                    <option key={a.asset_id} value={a.asset_id}>
+                      {a.asset.kind}/{a.asset.jaw} — sha256{" "}
+                      {a.asset.sha256.slice(0, 12)}…
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field" style={{ marginBottom: 0 }}>
+                <span>Role</span>
+                <select aria-label="Attachment role" value={attachRole}
+                        onChange={(e) => setAttachRole(
+                          e.target.value as "original" | "attachment")}>
+                  <option value="original">original</option>
+                  <option value="attachment">attachment</option>
+                </select>
+              </label>
+              <button type="button" className="small"
+                disabled={!attachPick || busy}
+                onClick={() => act(
+                  () => attachToRx(rxId, attachPick, attachRole)
+                    .then(() => setAttachPick("")),
+                  "File attached")}>
+                Attach
+              </button>
+            </div>
+          ) : null;
+        })()}
         {attachments.length === 0
           ? <p className="empty">No attachments.</p>
           : (

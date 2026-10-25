@@ -145,6 +145,24 @@ async def test_invalid_stl_rejected(client, s3ok):
     assert r.json()["detail"]["code"] == "invalid_mesh"
 
 
+async def test_truncated_ascii_stl_rejected(client, s3ok):
+    """UAT-ASSET-05: a cut-off ASCII upload carries solid+facet markers but
+    no closing endfacet/endsolid — it must never become format_ok."""
+    await login(client, "staff@pa.dev")
+    content = ASCII_STL.split(b"outer loop")[0]  # ends mid-facet
+    assert b"facet" in content and b"endsolid" not in content
+    r = await _upload(client, content)
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "invalid_mesh"
+
+
+async def test_ascii_stl_still_accepted(client, s3ok):
+    await login(client, "staff@pa.dev")
+    r = await _upload(client, ASCII_STL)
+    assert r.status_code == 202, r.text
+    assert r.json()["format_status"] == "format_ok"
+
+
 async def test_dedup_returns_same_asset(client, s3ok):
     await login(client, "staff@pa.dev")
     content = _binary_stl(5)
