@@ -44,6 +44,9 @@ BEGIN
   DELETE FROM rx_template WHERE tenant_id = t;
   DELETE FROM catalog_item WHERE tenant_id = t;
   DELETE FROM org_connection WHERE tenant_id = t;
+  -- org defaults reference roster_member/location — clear before deleting
+  UPDATE organization SET default_doctor_id = NULL,
+      default_location_id = NULL WHERE tenant_id = t;
   DELETE FROM roster_member WHERE tenant_id = t;
   DELETE FROM location WHERE tenant_id = t;
   DELETE FROM membership WHERE tenant_id = t;
