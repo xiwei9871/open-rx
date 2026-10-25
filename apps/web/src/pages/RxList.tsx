@@ -2,21 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import {
   checkInRx, getDashboard, listRx, type Dashboard, type Me, type Rx,
 } from "../api";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Saved", submitted: "Submitted", checked_in: "Checked-In",
-  in_progress: "In Progress", on_hold: "On Hold", completed: "Completed",
-  reopened: "Reopened", cancelled: "Cancelled",
-};
-
-const FULFILLMENT_LABELS: Record<string, string> = {
-  none: "—", qc_pending: "QC pending", qc_passed: "QC passed",
-  shipped: "Shipped", received: "Received", delivered: "Delivered",
-  dispatched: "Dispatched", in_transit: "In transit", exception: "Exception",
-};
-
-const th = { textAlign: "left" as const, padding: "4px 10px 4px 0" };
-const td = { padding: "4px 10px 4px 0" };
+import {
+  fmtDate, fulfillmentLabel, FULFILLMENT_LABELS, statusLabel,
+  STATUS_LABELS,
+} from "../lib";
 
 export default function RxList({ me, onOpen, onNew }: {
   me: Me;
@@ -31,6 +20,7 @@ export default function RxList({ me, onOpen, onNew }: {
   const [fulFilter, setFulFilter] = useState("");
   const [dueBefore, setDueBefore] = useState("");
   const [err, setErr] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setErr("");
@@ -50,42 +40,55 @@ export default function RxList({ me, onOpen, onNew }: {
 
   async function onCheckIn(e: React.MouseEvent, id: string, version: number) {
     e.stopPropagation();
-    setErr("");
+    if (busyId) return;
+    setErr(""); setBusyId(id);
     try {
       await checkInRx(id, version);
       await reload();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
+    } finally {
+      setBusyId(null);
     }
   }
 
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
   return (
     <section>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+      <div className="page-head">
         <h2>{isLab ? "Received Prescriptions" : "Prescriptions"}</h2>
         {!isLab && me.permissions.includes("rx:write") && (
-          <button onClick={onNew}>New Rx</button>
+          <button className="primary" onClick={onNew}>New Rx</button>
         )}
-      </header>
-      {dash && (
-        <div data-testid="dashboard"
-             style={{ display: "flex", gap: 14, marginBottom: 8 }}>
-          {Object.entries(dash.by_fulfillment)
-            .filter(([k, n]) => k !== "none" && n > 0)
-            .map(([k, n]) => (
-              <span key={k} style={{ fontSize: 12, color: "#444" }}>
-                {FULFILLMENT_LABELS[k] ?? k}: <strong>{n}</strong>
-              </span>
-            ))}
-          {dash.due_soon.length > 0 && (
-            <span data-testid="due-soon" role="status"
-                  style={{ fontSize: 12, color: "#b45309" }}>
-              Due soon ({dash.due_soon_hours}h): {dash.due_soon.length}
-            </span>
-          )}
+      </div>
+      <div className="stats" data-testid="dashboard">
+        <div className="stat">
+          <div className="n">{total}</div>
+          <div className="l">Total shown</div>
         </div>
-      )}
-      <p>
+        {Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => (
+          <div className="stat" key={k}>
+            <div className="n">{n}</div>
+            <div className="l">{statusLabel(k)}</div>
+          </div>
+        ))}
+        {dash && Object.entries(dash.by_fulfillment)
+          .filter(([k, n]) => k !== "none" && n > 0)
+          .map(([k, n]) => (
+            <div className="stat" key={k}>
+              <div className="n">{n}</div>
+              <div className="l">{fulfillmentLabel(k)}</div>
+            </div>
+          ))}
+        {dash && dash.due_soon.length > 0 && (
+          <div className="stat warn" data-testid="due-soon" role="status">
+            <div className="n">{dash.due_soon.length}</div>
+            <div className="l">Due soon ({dash.due_soon_hours}h)</div>
+          </div>
+        )}
+      </div>
+      <div className="toolbar">
         <label>Status{" "}
           <select value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">All</option>
@@ -93,7 +96,7 @@ export default function RxList({ me, onOpen, onNew }: {
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
-        </label>{" "}
+        </label>
         <label>Fulfillment{" "}
           <select value={fulFilter}
                   onChange={(e) => setFulFilter(e.target.value)}>
@@ -104,57 +107,67 @@ export default function RxList({ me, onOpen, onNew }: {
                 <option key={v} value={v}>{l}</option>
               ))}
           </select>
-        </label>{" "}
+        </label>
         <label>Due before{" "}
           <input type="date" value={dueBefore}
                  onChange={(e) => setDueBefore(e.target.value)} />
-        </label>{" "}
-        {Object.entries(counts).map(([k, n]) => (
-          <span key={k} style={{ marginRight: 8, fontSize: 12, color: "#555" }}>
-            {STATUS_LABELS[k] ?? k}: {n}
-          </span>
-        ))}
-      </p>
-      {err && <p role="alert" style={{ color: "crimson" }}>{err}</p>}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        </label>
+      </div>
+      {err && <p role="alert" className="alert">{err}</p>}
+      <div className="card" style={{ padding: 0 }}>
+      <div className="table-wrap">
+      <table className="data">
         <thead>
           <tr>
-            <th style={th}>Rx #</th><th style={th}>Status</th>
-            <th style={th}>Due</th><th style={th}>Created</th>
-            {isLab && <th style={th}>Action</th>}
+            <th>Rx #</th><th>Patient</th>
+            <th className="hide-sm">{isLab ? "Practice" : "Lab"}</th>
+            <th>Status</th><th className="hide-sm">Fulfillment</th>
+            <th>Due</th><th className="hide-sm">Created</th>
+            {isLab && <th>Action</th>}
           </tr>
         </thead>
         <tbody>
           {items.map((r) => (
-            <tr key={r.id} onClick={() => onOpen(r.id)}
-                style={{ cursor: "pointer", borderTop: "1px solid #ddd" }}>
-              <td style={td}>{r.rx_number}</td>
-              <td style={td}>
-                {STATUS_LABELS[r.status] ?? r.status}
-                {r.checked_in_via === "download" && " (via download)"}
-                {r.fulfillment_status !== "none" && (
-                  <span style={{ color: "#555", fontSize: 12 }}>
-                    {" "}· {FULFILLMENT_LABELS[r.fulfillment_status]
-                        ?? r.fulfillment_status}
-                  </span>
-                )}
+            <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
+              <td><strong>{r.rx_number}</strong></td>
+              <td>{r.patient_label ?? r.patient_id.slice(0, 8) + "…"}</td>
+              <td className="hide-sm">
+                {(isLab ? r.practice_name : r.lab_name) ?? "—"}</td>
+              <td>
+                <span className={`pill st-${r.status}`}>
+                  {statusLabel(r.status)}
+                </span>
+                {r.checked_in_via === "download" &&
+                  <small className="muted"> (dl)</small>}
               </td>
-              <td style={td}>{r.due_date ?? "—"}</td>
-              <td style={td}>{r.created_at.slice(0, 10)}</td>
+              <td className="hide-sm">
+                {r.fulfillment_status !== "none" ? (
+                  <span className={`pill st-${r.fulfillment_status}`}>
+                    {fulfillmentLabel(r.fulfillment_status)}
+                  </span>
+                ) : "—"}
+              </td>
+              <td>{fmtDate(r.due_date)}</td>
+              <td className="hide-sm">{fmtDate(r.created_at)}</td>
               {isLab && (
-                <td style={td}>
+                <td>
                   {r.status === "submitted" && (
-                    <button onClick={(e) => onCheckIn(e, r.id, r.version)}>Check in</button>
+                    <button className="small" disabled={busyId === r.id}
+                      onClick={(e) => onCheckIn(e, r.id, r.version)}>
+                      {busyId === r.id ? "…" : "Check in"}
+                    </button>
                   )}
                 </td>
               )}
             </tr>
           ))}
           {items.length === 0 && (
-            <tr><td colSpan={5} style={td}><em>No prescriptions.</em></td></tr>
+            <tr><td colSpan={8}><em className="empty">No prescriptions.</em></td></tr>
           )}
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
   );
 }

@@ -84,7 +84,13 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_minio_pw_change_me}
       # E2E suites sign in repeatedly per seeded user; keep prod-tight limits
       # overrideable here (security tests monkeypatch their own limit).
-      RL_LOGIN_EMAIL_LIMIT: ${RL_LOGIN_EMAIL_LIMIT:-60}
+      RL_LOGIN_EMAIL_LIMIT: ${RL_LOGIN_EMAIL_LIMIT:-300}
+      # Audit/E2E runs sign in as five roles from one host IP; keep the
+      # prod-tight per-IP limit overrideable rather than relaxing the code.
+      RL_LOGIN_IP_LIMIT: ${RL_LOGIN_IP_LIMIT:-600}
+      # Same story for the shared write throttle: a full browser suite runs
+      # dozens of creates/submits per user inside one 300s window.
+      RL_WRITE_LIMIT: ${RL_WRITE_LIMIT:-300}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

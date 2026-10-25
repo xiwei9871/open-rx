@@ -6,8 +6,7 @@ import {
   type Case, type Me, type Patient, type PatientAsset, type Rx,
 } from "../api";
 import StlPreview from "../components/StlPreview";
-
-const input = { display: "block", width: "100%", marginBottom: 6, padding: 4 } as const;
+import { fmtDate, saveAs, statusLabel, useActionLock } from "../lib";
 
 export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }: {
   me: Me; patientId: string; onDeleted: () => void;
@@ -51,9 +50,11 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  const lock = useActionLock();
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
     if (!patient) return;
+    await lock(async () => {
     setErr("");
     try {
       const p = await updatePatient(patient.id, patient.version, {
@@ -65,20 +66,24 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
     }
+    });
   }
 
   async function onDelete() {
     if (!patient) return;
+    await lock(async () => {
     try {
       await deletePatient(patient.id);
       onDeleted();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
     }
+    });
   }
 
   async function onAddCase(e: React.FormEvent) {
     e.preventDefault();
+    await lock(async () => {
     try {
       await createCase(patientId, caseLabel);
       setCaseLabel("");
@@ -86,12 +91,14 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex));
     }
+    });
   }
 
   async function onUpload(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file || !patient) return;
+    await lock(async () => {
     setBusy(true); setErr(""); setMsg("");
     try {
       const asset = await uploadAsset(file, jaw);
@@ -106,78 +113,105 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
     } finally {
       setBusy(false);
     }
+    });
   }
 
-  if (denied) return <p role="alert">Access denied.</p>;
-  if (err && !patient) return <p role="alert">{err}</p>;
-  if (!patient) return <p>Loading…</p>;
+  if (denied) return <p role="alert" className="alert">Access denied.</p>;
+  if (err && !patient) return <p role="alert" className="alert">{err}</p>;
+  if (!patient) return <p className="empty">Loading…</p>;
 
   return (
     <section>
-      <h2>{patient.last_name}, {patient.first_name} <small>({patient.patient_number})</small></h2>
-      <p>DOB: {patient.dob ?? "—"} · External ref: {patient.external_ref ?? "—"} · v{patient.version}</p>
-      {msg && <p role="status" style={{ color: "green" }}>{msg}</p>}
-      {err && <p role="alert" style={{ color: "crimson" }}>{err}</p>}
+      <div className="page-head">
+        <h2>{patient.last_name}, {patient.first_name}{" "}
+          <small className="muted">({patient.patient_number})</small></h2>
+      </div>
+      <p className="muted">DOB: {patient.dob ?? "—"} ·
+        External ref: {patient.external_ref ?? "—"} · v{patient.version}</p>
+      {msg && <p role="status" className="notice">{msg}</p>}
+      {err && <p role="alert" className="alert">{err}</p>}
 
       {canWrite && (
-        <form onSubmit={onSave}>
+        <form onSubmit={onSave} className="card stack">
           <h3>Edit</h3>
           <input required aria-label="First name" value={edit.first_name}
-            onChange={(e) => setEdit({ ...edit, first_name: e.target.value })} style={input} />
+            onChange={(e) => setEdit({ ...edit, first_name: e.target.value })} />
           <input required aria-label="Last name" value={edit.last_name}
-            onChange={(e) => setEdit({ ...edit, last_name: e.target.value })} style={input} />
-          <textarea aria-label="Notes" placeholder="Notes" value={edit.notes}
-            onChange={(e) => setEdit({ ...edit, notes: e.target.value })} style={input} />
-          <button type="submit">Save</button>
+            onChange={(e) => setEdit({ ...edit, last_name: e.target.value })} />
+          <textarea aria-label="Notes" placeholder="Notes" rows={2}
+            value={edit.notes}
+            onChange={(e) => setEdit({ ...edit, notes: e.target.value })} />
+          <div className="row">
+            <button type="submit" className="primary">Save</button>
+            {canDelete &&
+              <button type="button" className="danger" onClick={onDelete}>
+                Delete patient</button>}
+          </div>
         </form>
       )}
-      {canDelete && <button onClick={onDelete}>Delete patient</button>}
+      {!canWrite && canDelete &&
+        <button className="danger" onClick={onDelete}>Delete patient</button>}
 
+      <div className="card">
       <h3>Treatment cases</h3>
-      {cases.length === 0 ? <p>No cases.</p> : (
+      {cases.length === 0 ? <p className="empty">No cases.</p> : (
         <ul>{cases.map((c) => (
           <li key={c.id}>{c.label ?? "(no label)"} — {c.stage}
-            {" "}· opened {new Date(c.opened_at).toLocaleDateString()}</li>
+            {" "}· opened {fmtDate(c.opened_at)}</li>
         ))}</ul>
       )}
       {canWrite && (
-        <form onSubmit={onAddCase} style={{ display: "flex", gap: 8 }}>
-          <input required aria-label="Case label" placeholder="New case label"
-            value={caseLabel} onChange={(e) => setCaseLabel(e.target.value)}
-            style={{ flex: 1, padding: 4 }} />
+        <form onSubmit={onAddCase} className="row">
+          <input required aria-label="Case label" className="grow"
+            placeholder="New case label"
+            value={caseLabel} onChange={(e) => setCaseLabel(e.target.value)} />
           <button type="submit">Open case</button>
         </form>
       )}
+      </div>
 
+      <div className="card">
       <h3>Prescription history</h3>
-      {rxHistory.length === 0 ? <p>No prescriptions.</p> : (
+      {rxHistory.length === 0 ? <p className="empty">No prescriptions.</p> : (
         <ul>{rxHistory.map((r) => (
           <li key={r.id}>
-            <a href="#" onClick={(e) => { e.preventDefault(); onOpenRx?.(r.id); }}>
+            <a href={`/rx/${r.id}`}
+               onClick={(e) => { e.preventDefault(); onOpenRx?.(r.id); }}>
               {r.rx_number}
             </a>{" "}
-            — {r.status} · due {r.due_date ?? "—"} · {r.created_at.slice(0, 10)}
+            <span className={`pill st-${r.status}`}>{statusLabel(r.status)}</span>
+            {" "}· due {fmtDate(r.due_date)} · {fmtDate(r.created_at)}
           </li>
         ))}</ul>
       )}
+      </div>
 
+      <div className="card">
       <h3>Files</h3>
-      {assets.length === 0 ? <p>No files.</p> : (
+      {assets.length === 0 ? <p className="empty">No files.</p> : (
         <ul>{assets.map((a) => (
           <li key={a.id}>
             {a.asset.kind}/{a.asset.jaw} — {a.asset.bytes} bytes —
             sha256 {a.asset.sha256.slice(0, 16)}… — {a.asset.format_status}
-            {" "}<button type="button" onClick={async () => {
-              const u = await downloadUrl(a.asset_id); window.open(u, "_blank");
-            }}>Download</button>
+            {" "}<button type="button" className="small" onClick={() => lock(
+              async () => {
+                try {
+                  const u = await downloadUrl(a.asset_id);
+                  await saveAs(u, `${a.asset.kind}-${a.asset.sha256.slice(0, 12)}.stl`);
+                } catch (ex) {
+                  setErr(ex instanceof Error ? ex.message : String(ex));
+                }
+              })}>Download</button>
             {a.asset.kind === "stl" && a.asset.format_status === "format_ok" && (
-              <button type="button" aria-label={`Preview ${a.asset_id}`}
+              <button type="button" className="small"
+                aria-label={`Preview ${a.asset_id}`}
                 onClick={() => setPreviewId(
-                  previewId === a.asset_id ? null : a.asset_id)}>Preview</button>
+                  previewId === a.asset_id ? null : a.asset_id)}>
+                {previewId === a.asset_id ? "Hide" : "Preview"}</button>
             )}
             {previewId === a.asset_id && <StlPreview assetId={a.asset_id} />}
             {canShare && (
-              <button type="button" onClick={async () => {
+              <button type="button" className="small" onClick={async () => {
                 await revokeReference(a.asset_id, a.subject_type, a.subject_id);
                 setAssets(await listPatientAssets(patientId));
               }}>Unlink</button>
@@ -186,7 +220,7 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
         ))}</ul>
       )}
       {canUpload && (
-        <form onSubmit={onUpload} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <form onSubmit={onUpload} className="row">
           <input required aria-label="STL file" type="file" accept=".stl"
             ref={fileRef} />
           <select aria-label="Jaw" value={jaw} onChange={(e) => setJaw(e.target.value)}>
@@ -199,6 +233,7 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx }
           </button>
         </form>
       )}
+      </div>
     </section>
   );
 }

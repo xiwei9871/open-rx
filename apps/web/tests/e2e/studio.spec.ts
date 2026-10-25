@@ -47,17 +47,22 @@ test.describe("M1 studio", () => {
     await page.getByRole("button", { name: "tooth 16" }).click();
     await expect(page.getByText("16:reset")).toBeVisible();
 
-    // save as template (prompt dialog)
-    page.once("dialog", (d) => d.accept("E2E Template"));
+    // save as template — inline name field, no native dialog
+    let nativeDialog = false;
+    page.on("dialog", (d) => { nativeDialog = true; void d.dismiss(); });
+    await page.getByLabel("Template name").fill("E2E Template");
     await page.getByRole("button", { name: "Save items as template" }).click();
-    await expect(page.getByLabel("Template")).toBeVisible();
+    await expect(
+      page.getByLabel("Template", { exact: true })).toBeVisible();
 
     // clear items then re-apply template
     await page.getByRole("button", { name: "remove" }).click();
-    await page.getByLabel("Template").selectOption({ label: "E2E Template" });
+    await page.getByLabel("Template", { exact: true })
+      .selectOption({ label: "E2E Template" });
     await expect(page.getByText(/teeth 16/)).toBeVisible();
 
     await page.getByRole("button", { name: "Save draft" }).click();
     await expect(page.getByText(/draft/i).first()).toBeVisible();
+    expect(nativeDialog).toBe(false);
   });
 });

@@ -1,0 +1,26 @@
+easyrx_capability,easyrs_status,evidence_or_gap,disposition
+Prescription dashboard with status filtering,PARTIAL,"RxList stat cards + status/fulfillment/due filters; no saved views",MVP-met roadmap-P2
+Universal parts/appliance library,PARTIAL,"catalog parts+appliances w/ option_schema; not the 500+ library",MVP-met roadmap-P2
+Rx templates save/apply/reuse,YES,"RxCreate apply template + save-as-template; e2e studio.spec",MVP-met
+Tooth/arch selection,PARTIAL,"per-item arch select + tooth toggle grid; no graphical FDI chart",MVP-met roadmap-P2
+Browser STL viewer,YES,"Three.js OrbitControls orbit/pan/zoom + reset; drag pixel-diff verified",MVP-met
+STL 3D editing (base/label/boolean),NO,"out of MVP scope; EasyRx 3D parity",roadmap-P3
+Rx comments + attachment-anchored discussion,YES,"RxDetail comments w/ file_reference; collab.spec",MVP-met
+Clinical approval request/decide w/ signature,YES,"notification approval_required + signature_name; collab.spec",MVP-met
+Notification/message center with counts,YES,"Inbox unread + pending-approval stats, kind/status filters",MVP-met
+Rx tags/tagging for filtering,NO,"EasyRx tags feature; not in 69-feature MVP",roadmap-P2
+Lab check-in (incl. download check-in),YES,"check_in endpoint + Download & Check-in; rx.spec",MVP-met
+Manual QC pass/fail,YES,"recordRxQc + qc_pending/qc_passed; fulfill.spec",MVP-met
+Ship/receive/deliver with carrier+tracking,YES,"fulfillment endpoints + RxDetail fulfillment card",MVP-met
+Practice-lab connection management,YES,"OrgSettings connections request/accept/withdraw",MVP-met
+Patient management + cases,YES,"Patients list/search/dup-guard, detail cases, attachment upload",MVP-met
+Attachment upload + presigned download,YES,"staging PUT -> complete; saveAs blob download verified",MVP-met
+Multi-location practice config,YES,"OrgSettings locations CRUD",MVP-met
+Doctor/staff roster management,YES,"OrgSettings roster CRUD + roles",MVP-met
+Lab production queue workbench,PARTIAL,"lab rx list has status chips + check-in; no kanban/batch ops",MVP-met roadmap-P2
+Prescription PDF bundle,YES,"downloadRxBundle zip; real download event verified",MVP-met
+VisualDLP print/production integration,NO,"vendor integration out of scope",roadmap-P3
+Reporting/analytics,NO,"dashboard stats only; no reports module",roadmap-P3
+Mobile responsive,PARTIAL,"390px: no overflow, nav usable; forms stack; no mobile-native nav",MVP-met roadmap-P3
+Deep links + browser history,YES,"URL routing on all pages; back/forward verified (fix this round)",MVP-met
+Duplicate-submit protection,YES,"useActionLock/busyRef on all mutations; dblclick verified",MVP-met

@@ -1,0 +1,206 @@
+/* EasyRS design system — single source of visual truth.
+   Palette: clinical-neutral slate + teal accent. No component library:
+   tokens + shared classes keep pages consistent without a dependency. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --ink: #1d2733;
+  --muted: #66727f;
+  --line: #dbe1e7;
+  --accent: #0e7490;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3f2f5;
+  --danger: #b42318;
+  --danger-soft: #fee4e2;
+  --ok: #067647;
+  --ok-soft: #dcfae6;
+  --warn: #b54708;
+  --warn-soft: #fef0c7;
+  --radius: 8px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.06);
+  font-size: 15px;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.45;
+}
+h1 { font-size: 1.4rem; margin: 0; }
+h2 { font-size: 1.2rem; margin: 0 0 0.75rem; }
+h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+p { margin: 0.4rem 0; }
+
+/* ---------- app shell ---------- */
+.appbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 1rem;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: 0.55rem 1rem; box-shadow: var(--shadow);
+}
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--accent); }
+.whoami { color: var(--muted); font-size: 0.85rem; }
+.nav { display: flex; gap: 0.25rem; margin-left: auto; flex-wrap: wrap; }
+.nav button {
+  border: 0; background: none; padding: 0.4rem 0.75rem;
+  border-radius: var(--radius); font: inherit; color: var(--ink);
+  cursor: pointer;
+}
+.nav button:hover { background: var(--accent-soft); }
+.nav button[aria-current="page"] {
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+.nav .badge {
+  display: inline-block; min-width: 1.1rem; margin-left: 0.3rem;
+  padding: 0 0.3rem; border-radius: 1rem; text-align: center;
+  background: var(--warn); color: #fff; font-size: 0.72rem;
+}
+.container { max-width: 1160px; margin: 0 auto; padding: 1rem; }
+
+/* ---------- primitives ---------- */
+button, .btn {
+  border: 1px solid var(--line); background: var(--panel);
+  border-radius: var(--radius); padding: 0.38rem 0.8rem;
+  font: inherit; color: var(--ink); cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary, .btn.primary {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600;
+}
+button.danger { color: var(--danger); border-color: var(--danger); }
+button.link { border: 0; background: none; color: var(--accent); padding: 0 0.2rem; }
+button.small { padding: 0.15rem 0.5rem; font-size: 0.85rem; }
+
+input, select, textarea {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 0.4rem 0.55rem; font: inherit; color: var(--ink);
+  background: var(--panel); max-width: 100%;
+}
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+label.field { display: block; margin-bottom: 0.7rem; }
+label.field > span { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.15rem; }
+label.field input, label.field select, label.field textarea { width: 100%; }
+.stack input:not([type=checkbox]), .stack select, .stack textarea {
+  display: block; width: 100%; margin-bottom: 0.55rem;
+}
+.stack button { margin-right: 0.5rem; }
+
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 1rem; margin-bottom: 1rem;
+}
+.card > h3:first-child { margin-top: 0; }
+.row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.row.end { justify-content: flex-end; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; }
+.muted { color: var(--muted); }
+.grow { flex: 1; min-width: 12rem; }
+.page-head { display: flex; align-items: baseline; justify-content: space-between;
+              gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.page-head h2 { margin: 0; }
+
+.alert {
+  background: var(--danger-soft); color: var(--danger);
+  border: 1px solid var(--danger); border-radius: var(--radius);
+  padding: 0.5rem 0.75rem; margin: 0.5rem 0;
+}
+.notice {
+  background: var(--ok-soft); color: var(--ok);
+  border: 1px solid var(--ok); border-radius: var(--radius);
+  padding: 0.5rem 0.75rem; margin: 0.5rem 0;
+}
+.empty { color: var(--muted); font-style: italic; }
+
+/* ---------- tables ---------- */
+table.data { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.data th {
+  text-align: left; padding: 0.45rem 0.6rem; color: var(--muted);
+  font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--line); white-space: nowrap;
+}
+table.data td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); }
+table.data tbody tr { cursor: default; }
+table.data tbody tr.clickable { cursor: pointer; }
+table.data tbody tr.clickable:hover { background: var(--accent-soft); }
+table.kv td { padding: 0.3rem 0.75rem 0.3rem 0; vertical-align: top; }
+table.kv td:first-child { color: var(--muted); white-space: nowrap; }
+.table-wrap { overflow-x: auto; }
+
+/* ---------- status pills ---------- */
+.pill {
+  display: inline-block; padding: 0.1rem 0.55rem; border-radius: 1rem;
+  font-size: 0.78rem; font-weight: 600; white-space: nowrap;
+  background: #eef1f4; color: var(--ink);
+}
+.pill.st-draft { background: #eef1f4; }
+.pill.st-submitted { background: var(--warn-soft); color: var(--warn); }
+.pill.st-checked_in, .pill.st-in_progress { background: var(--accent-soft); color: var(--accent); }
+.pill.st-on_hold { background: var(--warn-soft); color: var(--warn); }
+.pill.st-completed, .pill.st-delivered, .pill.st-qc_passed, .pill.st-pass {
+  background: var(--ok-soft); color: var(--ok);
+}
+.pill.st-reopened { background: var(--warn-soft); color: var(--warn); }
+.pill.st-cancelled, .pill.st-fail, .pill.st-exception {
+  background: var(--danger-soft); color: var(--danger);
+}
+.pill.st-shipped, .pill.st-received, .pill.st-dispatched, .pill.st-in_transit,
+.pill.st-qc_pending { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- dashboard stats ---------- */
+.stats { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+.stat {
+  flex: 1; min-width: 7rem; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 0.6rem 0.8rem; box-shadow: var(--shadow);
+}
+.stat .n { font-size: 1.3rem; font-weight: 700; }
+.stat .l { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+.stat.warn { border-color: var(--warn); background: var(--warn-soft); }
+
+.toolbar { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+           margin-bottom: 0.75rem; }
+.toolbar label { font-size: 0.82rem; color: var(--muted); display: flex;
+                 gap: 0.3rem; align-items: center; }
+
+/* ---------- misc ---------- */
+.toothgrid { display: flex; flex-wrap: wrap; gap: 3px; max-width: 560px; }
+.toothgrid button {
+  width: 2.3rem; padding: 0.25rem 0; font-size: 0.78rem;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--panel);
+}
+.toothgrid button[aria-pressed="true"] {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+}
+.stl-box { border: 1px solid var(--line); border-radius: var(--radius);
+           background: #10161c; margin-top: 0.5rem; }
+.stl-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+.dialog {
+  position: fixed; inset: 0; z-index: 50; display: flex;
+  align-items: center; justify-content: center;
+  background: rgb(16 24 40 / 0.45);
+}
+.dialog > .card { min-width: 20rem; max-width: 30rem; margin: 0; }
+.msg-card { background: var(--panel); border: 1px solid var(--line);
+            border-radius: var(--radius); padding: 0.8rem; margin-bottom: 0.6rem;
+            box-shadow: var(--shadow); }
+.msg-card.unread { border-left: 4px solid var(--accent); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 700px) {
+  .appbar { flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem 0.7rem; }
+  .nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
+  .container { padding: 0.7rem; }
+  .grid2 { grid-template-columns: 1fr; }
+  table.data { font-size: 0.85rem; }
+  table.data td, table.data th { padding: 0.35rem 0.4rem; }
+  .hide-sm { display: none; }
+}

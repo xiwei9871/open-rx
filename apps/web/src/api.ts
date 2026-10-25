@@ -321,6 +321,11 @@ const RxSchema = z.object({
   delivered_at: z.string().nullable(),
   qc_status: z.string(),
   created_at: z.string(),
+  patient_label: z.string().nullable().optional(),
+  practice_name: z.string().nullable().optional(),
+  lab_name: z.string().nullable().optional(),
+  doctor_name: z.string().nullable().optional(),
+  location_name: z.string().nullable().optional(),
   items: z.array(RxItemSchema).optional(),
 });
 export type Rx = z.infer<typeof RxSchema>;

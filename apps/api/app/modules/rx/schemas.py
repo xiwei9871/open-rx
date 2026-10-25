@@ -103,6 +103,12 @@ class RxOut(BaseModel):
     delivered_at: datetime | None
     qc_status: str
     created_at: datetime
+    # denormalized display fields — filled by _display_fields, not columns
+    patient_label: str | None = None
+    practice_name: str | None = None
+    lab_name: str | None = None
+    doctor_name: str | None = None
+    location_name: str | None = None
 
 
 class QcRequest(BaseModel):

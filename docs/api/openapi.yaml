@@ -1662,8 +1662,8 @@ components:
           enum: [draft, submitted, checked_in, in_progress, on_hold, completed, reopened, cancelled]
         fulfillment_status:
           type: string
-          description: "Projection driven by shipment.* events — never API-writable"
-          enum: [none, dispatched, in_transit, received, delivered, exception]
+          description: "Projection driven by fulfillment events — never API-writable"
+          enum: [none, qc_pending, qc_passed, shipped, dispatched, in_transit, received, delivered, exception]
           readOnly: true
         form_type: {type: string, enum: [standard, aligner, idb]}
         form_payload: {type: object, description: "form-type specific answers; schema per form_type (V1.1 to define)"}
@@ -1681,6 +1681,17 @@ components:
         submitted_at: {type: [string, "null"], format: date-time, readOnly: true}
         checked_in_at: {type: [string, "null"], format: date-time, readOnly: true}
         completed_at: {type: [string, "null"], format: date-time, readOnly: true}
+        carrier: {type: [string, "null"], readOnly: true}
+        tracking_number: {type: [string, "null"], readOnly: true}
+        shipped_at: {type: [string, "null"], format: date-time, readOnly: true}
+        received_at: {type: [string, "null"], format: date-time, readOnly: true}
+        delivered_at: {type: [string, "null"], format: date-time, readOnly: true}
+        qc_status: {type: string, enum: [none, pass, fail], readOnly: true}
+        patient_label: {type: [string, "null"], readOnly: true, description: "denormalized 'NNN — Last, First' for display; never a lookup key"}
+        practice_name: {type: [string, "null"], readOnly: true}
+        lab_name: {type: [string, "null"], readOnly: true}
+        doctor_name: {type: [string, "null"], readOnly: true}
+        location_name: {type: [string, "null"], readOnly: true}
         created_at: {type: string, format: date-time, readOnly: true}
     RxCreate:
       type: object

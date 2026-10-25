@@ -117,11 +117,47 @@ def _record_transition(db: AsyncSession, p: Principal, rx: Rx,
         via=via, actor_user_id=p.user.id, actor_org_id=p.org.id, note=note))
 
 
+async def _display_fields(db: AsyncSession,
+                          rxs: list[Rx]) -> dict[uuid.UUID, dict]:
+    """Resolve human-readable names for ids on an Rx (patient, orgs,
+    doctor, location) so list/detail views never have to show raw UUIDs.
+    Soft-deleted patients keep their label — the record must stay readable."""
+    pat_ids = {r.patient_id for r in rxs}
+    org_ids = {r.practice_org_id for r in rxs} | {
+        r.lab_org_id for r in rxs if r.lab_org_id}
+    doc_ids = {r.doctor_id for r in rxs if r.doctor_id}
+    loc_ids = {r.location_id for r in rxs if r.location_id}
+    pats = {p.id: p for p in (await db.execute(
+        select(Patient).where(Patient.id.in_(pat_ids)))).scalars()}
+    orgs = {o.id: o for o in (await db.execute(
+        select(Organization).where(Organization.id.in_(org_ids)))).scalars()}
+    docs = {d.id: d for d in (await db.execute(
+        select(RosterMember).where(RosterMember.id.in_(doc_ids)))).scalars()} \
+        if doc_ids else {}
+    locs = {l.id: l for l in (await db.execute(
+        select(Location).where(Location.id.in_(loc_ids)))).scalars()} \
+        if loc_ids else {}
+    out: dict[uuid.UUID, dict] = {}
+    for r in rxs:
+        pat = pats.get(r.patient_id)
+        out[r.id] = {
+            "patient_label": (
+                f"{pat.patient_number} — {pat.last_name}, {pat.first_name}"
+                + (" (deleted)" if pat.deleted_at else "")) if pat else None,
+            "practice_name": getattr(orgs.get(r.practice_org_id), "name", None),
+            "lab_name": getattr(orgs.get(r.lab_org_id), "name", None),
+            "doctor_name": getattr(docs.get(r.doctor_id), "display_name", None),
+            "location_name": getattr(locs.get(r.location_id), "name", None),
+        }
+    return out
+
+
 async def _rx_out(db: AsyncSession, rx: Rx) -> dict:
     items = (await db.execute(
         select(RxItem).where(RxItem.rx_id == rx.id)
         .order_by(RxItem.created_at, RxItem.id))).scalars().all()
     out = RxOut.model_validate(rx).model_dump(mode="json")
+    out.update((await _display_fields(db, [rx]))[rx.id])
     out["items"] = [
         {**RxItemOut(
             id=i.id, appliance_id=i.catalog_item_id, arch=i.arch,
@@ -318,7 +354,11 @@ async def list_rx(db: Db, p: Me, _g=Depends(require_perm("rx:read")),
         .limit(lim + 1))).scalars().all()
     nxt = (base64.b64encode(str(offset + lim).encode()).decode()
            if len(rows) > lim else None)
-    return {"items": [RxOut.model_validate(r) for r in rows[:lim]],
+    display = await _display_fields(db, rows[:lim])
+    return {"items": [
+        {**RxOut.model_validate(r).model_dump(mode="json"),
+         **display[r.id]}
+        for r in rows[:lim]],
             "next_cursor": nxt, "counts": counts}
 
 

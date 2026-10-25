@@ -44,6 +44,7 @@ test.describe("m2 collaboration", () => {
 
     // lab: check in, request approval, comment, complete
     await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await signIn(page, LAB.email, LAB.password);
     await page.getByRole("cell", { name: rxNum }).click();
     await page.getByRole("button", { name: "Check in" }).click();
@@ -58,6 +59,7 @@ test.describe("m2 collaboration", () => {
     // (must precede lab Complete — completion bumps rx.version, which would
     // correctly stale the request: 409 version_drift.)
     await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await signIn(page, PRACTICE.email, PRACTICE.password);
     await page.getByRole("button", { name: "Inbox" }).click();
     // inbox is newest-first; repeated runs may leave older resolved copies
@@ -73,6 +75,7 @@ test.describe("m2 collaboration", () => {
 
     // lab: complete the order
     await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await signIn(page, LAB.email, LAB.password);
     await page.getByRole("cell", { name: rxNum }).click();
     await page.getByRole("button", { name: "Mark complete" }).click();

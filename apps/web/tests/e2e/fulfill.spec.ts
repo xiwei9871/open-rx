@@ -41,6 +41,7 @@ test("full delivery loop: qc -> ship -> receive -> deliver", async ({ page }) =>
 
   // lab: check-in -> complete -> QC -> ship
   await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   await signIn(page, LAB.email, LAB.password);
   await page.getByRole("cell", { name: rxNum }).click();
   await page.getByRole("button", { name: "Check in" }).click();
@@ -59,6 +60,7 @@ test("full delivery loop: qc -> ship -> receive -> deliver", async ({ page }) =>
 
   // practice: receive -> deliver
   await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   await signIn(page, PRACTICE.email, PRACTICE.password);
   await page.getByRole("button", { name: "Prescriptions" }).click();
   await page.getByRole("cell", { name: rxNum }).click();
