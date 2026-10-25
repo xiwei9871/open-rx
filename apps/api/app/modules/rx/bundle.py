@@ -103,61 +103,92 @@ async def _items(db: AsyncSession, rx: Rx):
         .order_by(RxItem.created_at))).all()
 
 
-async def content_fingerprint(db: AsyncSession, rx: Rx) -> str:
-    """sha256 over everything the delivered package depends on: Rx content
-    fields, the item configuration, and the live file-reference set.
-    Status/version are deliberately excluded — a check-in never changes
-    what the package contains, an attachment/item edit always does."""
-    items = await _items(db, rx)
-    refs = await _refs(db, rx)
-    payload = {
-        "patient_id": str(rx.patient_id),
-        "case_id": str(rx.case_id or ""),
-        "lab_org_id": str(rx.lab_org_id or ""),
-        "location_id": str(rx.location_id or ""),
-        "doctor_id": str(rx.doctor_id or ""),
-        "form_type": rx.form_type,
-        "form_payload": rx.form_payload,
-        "due_date": rx.due_date.isoformat() if rx.due_date else "",
-        "notes": rx.notes or "",
-        "items": [{"catalog_item_id": str(i.catalog_item_id),
-                   "arch": i.arch, "tooth_ops": i.tooth_ops,
-                   "options": i.options, "qty": i.qty}
-                  for i, _ in items],
-        "refs": sorted(f"{r.asset_id}:{r.role}" for r, _ in refs),
-    }
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, default=str).encode()
-    ).hexdigest()
-
-
-def _item_line(item: RxItem, cat: CatalogItem) -> str:
-    parts = [f"{cat.code} {cat.name}", f"arch={item.arch}"]
-    if item.qty != 1:
-        parts.append(f"qty={item.qty}")
-    if item.tooth_ops:
-        ops = ", ".join(f"{o.get('tooth')}:{o.get('op')}"
-                        for o in item.tooth_ops)
-        parts.append(f"teeth[{ops}]")
-    if item.options:
-        parts.append("options=" + json.dumps(item.options,
-                                             ensure_ascii=False,
-                                             sort_keys=True))
-    return " — ".join(parts)
-
-
-async def _prescription_pdf(db: AsyncSession, rx: Rx,
-                            manifest_files: list[dict]) -> bytes:
+async def rx_snapshot(db: AsyncSession, rx: Rx) -> dict:
+    """Single canonical snapshot: EVERY field the PDF renders or the
+    manifest records — including mutable display fields (patient name,
+    org names, prescriber, catalog code/name). The content fingerprint is
+    derived from this same dict, so reuse and rendering can never drift
+    apart (Final Gate A)."""
     patient = await db.get(Patient, rx.patient_id)
     practice = await db.get(Organization, rx.practice_org_id)
     lab = await db.get(Organization, rx.lab_org_id) if rx.lab_org_id else None
     doctor = await db.get(RosterMember, rx.doctor_id) if rx.doctor_id else None
     items = await _items(db, rx)
-    pat = (f"{patient.last_name}, {patient.first_name}"
-           if patient else str(rx.patient_id))
-    pat += (f" (ref {patient.external_ref})"
-            if patient and patient.external_ref else "")
-    item_lines = [_item_line(i, c) for i, c in items] or ["(none)"]
+    refs = await _refs(db, rx)
+    return {
+        "rx_number": rx.rx_number,
+        "rx_id": str(rx.id),
+        # volatile — rendered but excluded from the fingerprint
+        "status_at_generation": rx.status,
+        "rx_version": rx.version,
+        # content — every field feeds the fingerprint
+        "due_date": rx.due_date.isoformat() if rx.due_date else "",
+        "notes": rx.notes or "",
+        "form_type": rx.form_type,
+        "form_payload": rx.form_payload,
+        "submitted_at": (rx.submitted_at.isoformat()
+                         if rx.submitted_at else ""),
+        "signature_name": rx.signature_name or "",
+        "signed_rx_version": rx.signed_rx_version,
+        "patient": {"first_name": patient.first_name if patient else "",
+                    "last_name": patient.last_name if patient else "",
+                    "external_ref": (patient.external_ref
+                                     if patient else "")},
+        "practice_name": practice.name if practice else "",
+        "lab_name": lab.name if lab else "",
+        "prescriber": doctor.display_name if doctor else "",
+        "patient_id": str(rx.patient_id),
+        "case_id": str(rx.case_id or ""),
+        "practice_org_id": str(rx.practice_org_id),
+        "lab_org_id": str(rx.lab_org_id or ""),
+        "location_id": str(rx.location_id or ""),
+        "doctor_id": str(rx.doctor_id or ""),
+        "items": [{"catalog_item_id": str(i.catalog_item_id),
+                   "code": c.code, "name": c.name,
+                   "arch": i.arch, "qty": i.qty,
+                   "tooth_ops": i.tooth_ops, "options": i.options}
+                  for i, c in items],
+        "refs": [{"asset_id": str(a.id), "role": r.role,
+                  "kind": a.kind, "jaw": a.jaw,
+                  "sha256": a.sha256, "bytes": a.bytes}
+                 for r, a in refs],
+    }
+
+
+# Volatile fields are rendered honestly (as "at generation" values) but do
+# not drive reuse — a check-in must not invalidate an identical package.
+_VOLATILE = {"status_at_generation", "rx_version"}
+
+
+def snapshot_fingerprint(snap: dict) -> str:
+    content = {k: v for k, v in snap.items() if k not in _VOLATILE}
+    return hashlib.sha256(
+        json.dumps(content, sort_keys=True, default=str).encode()
+    ).hexdigest()
+
+
+def _item_line(item: dict) -> str:
+    parts = [f"{item['code']} {item['name']}", f"arch={item['arch']}"]
+    if item["qty"] != 1:
+        parts.append(f"qty={item['qty']}")
+    if item["tooth_ops"]:
+        ops = ", ".join(f"{o.get('tooth')}:{o.get('op')}"
+                        for o in item["tooth_ops"])
+        parts.append(f"teeth[{ops}]")
+    if item["options"]:
+        parts.append("options=" + json.dumps(item["options"],
+                                             ensure_ascii=False,
+                                             sort_keys=True))
+    return " — ".join(parts)
+
+
+def _prescription_pdf(snap: dict, manifest_files: list[dict]) -> bytes:
+    p = snap["patient"]
+    pat = f"{p['last_name']}, {p['first_name']}".strip(", ") or \
+        snap["patient_id"]
+    if p["external_ref"]:
+        pat += f" (ref {p['external_ref']})"
+    item_lines = [_item_line(i) for i in snap["items"]] or ["(none)"]
     attach_lines = [
         f"{f['entry']}  {f['kind']}/{f.get('jaw') or '-'}  "
         f"{f['bytes']} B  sha256:{f['sha256'][:16]}…"
@@ -165,33 +196,38 @@ async def _prescription_pdf(db: AsyncSession, rx: Rx,
     sections = [
         ("Parties", [
             f"Patient: {pat}",
-            f"Practice: {practice.name if practice else rx.practice_org_id}",
-            f"Prescriber: {doctor.display_name if doctor else '-'}",
-            f"Laboratory: {lab.name if lab else '-'}",
+            f"Practice: {snap['practice_name'] or snap['practice_org_id']}",
+            f"Prescriber: {snap['prescriber'] or '-'}",
+            f"Laboratory: {snap['lab_name'] or '-'}",
         ]),
         ("Order", [
-            f"Rx number: {rx.rx_number}",
-            f"Status: {rx.status}",
-            f"Due date: {rx.due_date or '-'}",
-            f"Submitted (UTC): "
-            f"{rx.submitted_at.isoformat() if rx.submitted_at else '-'}",
-            f"Signed by: {rx.signature_name or '-'}",
+            f"Rx number: {snap['rx_number']}",
+            f"Status at generation: {snap['status_at_generation']}",
+            f"Due date: {snap['due_date'] or '-'}",
+            f"Submitted (UTC): {snap['submitted_at'] or '-'}",
+            f"Signed by: {snap['signature_name'] or '-'}",
+            f"Signed version: {snap['signed_rx_version'] or '-'}",
         ]),
         ("Items", item_lines),
-        ("Instructions", [rx.notes or "(none)"]),
+        ("Instructions", [snap["notes"] or "(none)"]),
         ("Attachments", attach_lines),
     ]
-    return prescription_pdf(f"Prescription {rx.rx_number}", sections,
+    return prescription_pdf(f"Prescription {snap['rx_number']}", sections,
                             "Generated by EasyRS — synthetic development "
                             "document, not a real clinical prescription")
 
 
-async def build_bundle(db: AsyncSession, rx: Rx) -> tuple[str, str, int, dict]:
-    """Build the ZIP on disk.
+async def build_bundle(db: AsyncSession, rx: Rx,
+                       snap: dict | None = None) -> tuple[str, str, int, dict]:
+    """Build the ZIP on disk from a canonical snapshot (computed if not
+    supplied — callers that fingerprint before reuse MUST pass the same
+    snapshot so the package matches the fingerprint exactly).
 
     Returns (temp_path, zip_sha256, zip_bytes, manifest_dict).
     The caller owns the temp file and must unlink it.
     """
+    if snap is None:
+        snap = await rx_snapshot(db, rx)
     refs = await _refs(db, rx)
 
     manifest_files = []
@@ -203,12 +239,13 @@ async def build_bundle(db: AsyncSession, rx: Rx) -> tuple[str, str, int, dict]:
             "sha256": asset.sha256, "bytes": asset.bytes,
         })
     manifest = {
-        "rx_number": rx.rx_number, "rx_id": str(rx.id),
-        "rx_version": rx.version, "status": rx.status,
+        "rx_number": snap["rx_number"], "rx_id": snap["rx_id"],
+        "rx_version": snap["rx_version"],
+        "status_at_generation": snap["status_at_generation"],
         "generated_at": datetime.now(UTC).isoformat(),
         "files": manifest_files,
     }
-    pdf = await _prescription_pdf(db, rx, manifest_files)
+    pdf = _prescription_pdf(snap, manifest_files)
 
     fd, path = tempfile.mkstemp(prefix="rxb-", suffix=".zip")
     try:

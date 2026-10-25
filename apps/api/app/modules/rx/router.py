@@ -541,19 +541,20 @@ async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
     await limit_writes(p)
     from app.config import get_settings
     from app.modules.rx.bundle import (BundleError, build_bundle,
-                                       bundle_key)
+                                       bundle_key, rx_snapshot,
+                                       snapshot_fingerprint)
     rx = await db.get(Rx, rx_id, with_for_update=True)
     if not rx or rx.tenant_id != p.tenant_id or not _is_party(p, rx):
         await _deny(db, request, p, "rx_not_visible")
     if rx.status == "draft":
         raise _illegal("Draft prescriptions have no delivery bundle")
 
-    # Content-fingerprint reuse (Final Gate F2): reuse a ready bundle iff
-    # its fingerprint — over Rx fields, item config and the live reference
-    # set — matches the current content. Status-only changes (check-in)
-    # never invalidate; any content change does.
-    from app.modules.rx.bundle import content_fingerprint
-    fp = await content_fingerprint(db, rx)
+    # Content-fingerprint reuse (Final Gate F2 + consistency fix): the
+    # canonical rx_snapshot feeds BOTH the fingerprint and the rendered
+    # PDF/manifest, so a reuse decision can never disagree with what the
+    # package would contain. Status/version are volatile — excluded.
+    snap = await rx_snapshot(db, rx)
+    fp = snapshot_fingerprint(snap)
     existing = (await db.execute(select(RxBundle).where(
         RxBundle.rx_id == rx.id, RxBundle.status == "ready",
         RxBundle.content_fingerprint == fp)
@@ -562,9 +563,11 @@ async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
     created_new = False
 
     if existing is None:
-        # Phase A — build outside the state transition.
+        # Phase A — build outside the state transition, from the SAME
+        # snapshot the fingerprint was computed on.
         try:
-            path, sha, size, _manifest = await build_bundle(db, rx)
+            path, sha, size, _manifest = await build_bundle(
+                db, rx, snap)
         except BundleError as e:
             raise HTTPException(status_code=502, detail={
                 "code": "bundle_build_failed", "message": str(e)})

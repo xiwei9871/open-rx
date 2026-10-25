@@ -102,6 +102,25 @@ skipped=0 做 junit 硬门（REQUIRE_S3=1；rustfs service 常驻）。
 测试：`tests/test_rx_finalgate.py` 12 项；API 全量 111 passed /
 6 skipped（skip 仅本地无 S3 门控）。迁移 `0008_finalgate`。
 
+## 文档一致性修正（2026-10-24 追加）
+
+- **A 指纹↔PDF 一致性**：`rx_snapshot()` 单一快照构造函数统一供给
+  指纹与 PDF/manifest 渲染——患者姓名、双方机构名、医生显示名、
+  目录 code/name 等可变展示字段全部纳入指纹。更名即产生新包；
+  旧包以独立 storage_key 永久保留（GET 列表可见全部历史，禁止覆盖）。
+  负测：患者改名后旧包被复用 → 修复后新包渲染新名（
+  `test_pdf_reflects_patient_rename`）；目录改名同样重建
+  （`test_display_rename_of_catalog_item_invalidates`）。
+- **状态快照语义**：PDF/manifest 将状态标注为 `Status at generation`，
+  并显式列出 `Signed version`。Check-in 只改变状态不改变内容 → 指纹
+  排除 status/rx_version，Check-in 后重复下载仍复用同一历史包，PDF
+  如实显示生成时刻的 `submitted`（`test_bundle_status_marked_as_
+  generation_snapshot`）。
+- **B 签署版本精确断言**：`test_signature_persisted_on_row` 改为逐项
+  精确比较——建单 v1 → 加项 v2 → 提交绑定 v2（`signed_rx_version=2`、
+  `version=3`），并核对持久化行。
+- API 全量 **114 passed / 6 skipped**；E2E 9 passed；远端 CI 见最终报告。
+
 ## 未解决/风险
 
 - presigned URL 转发窗口：短期 TTL 缓解；未做一次性令牌（后续阶段）。

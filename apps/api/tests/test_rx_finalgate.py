@@ -52,21 +52,43 @@ async def test_submit_requires_explicit_confirm_field(client):
 
 
 async def test_signature_persisted_on_row(client, admindb):
-    """signer user_id + UTC timestamp + signed version really persist."""
+    """signer user_id + UTC timestamp + signed version really persist,
+    with EXACT version arithmetic (B: no loose OR conditions)."""
     from app.modules.iam.models import UserAccount
     from app.modules.rx.models import Rx
     await login(client, STAFF)
     me = (await client.get("/v1/auth/me")).json()
-    rx = await _submitted_rx(client)
+
+    # create (v1) -> items replace (v2) -> submit binds v2, bumps to v3
+    body = {"patient_id": await _patient_id(client),
+            "lab_org_id": await _lab_org_id(client)}
+    rx = (await client.post("/v1/rx", json=body)).json()
+    assert rx["version"] == 1
+    app_id = await _catalog_id(client, "HWL")
+    await client.put(f"/v1/rx/{rx['id']}/items",
+                     json={"items": [{"appliance_id": app_id,
+                                      "arch": "upper"}]},
+                     headers={"If-Match": "1"})
+    pre = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    assert pre["version"] == 2
+    r = await client.post(
+        f"/v1/rx/{rx['id']}/submit",
+        json={"signature_name": "Dr. Demo", "confirm_submit": True},
+        headers={"Idempotency-Key": uuid.uuid4().hex,
+                 "If-Match": "2"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["version"] == 3
+    assert out["signed_rx_version"] == 2  # binds exactly the pre-submit version
+
     row = (await admindb.execute(
         select(Rx).where(Rx.id == uuid.UUID(rx["id"])))).scalar_one()
     assert row.signature_name == "Dr. Demo"
     assert row.submitted_by_user_id == uuid.UUID(me["user_id"])
     assert row.submitted_at is not None
     assert row.submitted_at.tzinfo is not None
-    # the exact version the signature binds is persisted, not implied
-    assert row.signed_rx_version == rx["version"] - 1 or \
-        row.signed_rx_version is not None
+    assert row.signed_rx_version == 2
+    assert row.version == 3
 
 
 async def test_submit_by_unauthorized_actor_rejected(client):
@@ -288,6 +310,80 @@ async def test_bundle_s3_down_aborts_cleanly(client, s3ok, monkeypatch):
     monkeypatch.undo()
     assert (await client.get(
         f"/v1/rx/{rx['id']}")).json()["status"] == "submitted"
+
+
+# ---------------- A: fingerprint tracks rendered content ------------------------
+async def test_pdf_reflects_patient_rename(client, s3ok):
+    """Patient name is rendered into the PDF, so renaming the patient MUST
+    produce a NEW bundle (old impl: fingerprint didn't cover it -> stale
+    name served). Old bundle stays listed — signed history is preserved."""
+    await login(client, STAFF)
+    rx = await _submitted_rx(client)
+    b1 = (await client.post(
+        f"/v1/rx/{rx['id']}/bundle-download")).json()
+    z1 = await httpx.AsyncClient().get(b1["download_url"])
+    assert "Ava" in await _pdf_text(z1.content)
+
+    pat = (await client.get(
+        f"/v1/patients/{rx['patient_id']}")).json()
+    r = await client.patch(f"/v1/patients/{pat['id']}",
+                           json={"first_name": "RenamedAva"},
+                           headers={"If-Match": str(pat["version"])})
+    assert r.status_code == 200, r.text
+
+    b2 = (await client.post(
+        f"/v1/rx/{rx['id']}/bundle-download")).json()
+    assert b2["bundle"]["id"] != b1["bundle"]["id"], \
+        "patient rename did not invalidate the bundle"
+    z2 = await httpx.AsyncClient().get(b2["download_url"])
+    t2 = await _pdf_text(z2.content)
+    assert "RenamedAva" in t2
+    assert "Synthetic, Ava" not in t2
+    listed = (await client.get(f"/v1/rx/{rx['id']}/bundle")).json()["items"]
+    assert len(listed) == 2  # history preserved, never overwritten
+
+
+async def test_display_rename_of_catalog_item_invalidates(client, s3ok,
+                                                        admindb):
+    """Catalog display names are rendered too — renaming must rebuild."""
+    from app.modules.rx.models import CatalogItem
+    await login(client, STAFF)
+    rx = await _submitted_rx(client)
+    b1 = (await client.post(
+        f"/v1/rx/{rx['id']}/bundle-download")).json()
+    cat = (await admindb.execute(select(CatalogItem).where(
+        CatalogItem.code == "HWL"))).scalar_one()
+    cat.name = "Hawley retainer MK II"
+    await admindb.commit()
+    b2 = (await client.post(
+        f"/v1/rx/{rx['id']}/bundle-download")).json()
+    assert b2["bundle"]["id"] != b1["bundle"]["id"]
+    z2 = await httpx.AsyncClient().get(b2["download_url"])
+    assert "MK II" in await _pdf_text(z2.content)
+
+
+async def test_bundle_status_marked_as_generation_snapshot(client, s3ok):
+    """A bundle built while submitted stays valid across check-in (content
+    unchanged), and its PDF labels the status honestly as
+    'at generation', not as a live claim."""
+    await login(client, STAFF)
+    rx = await _submitted_rx(client)
+    # practice-side build while submitted — no check-in
+    b1 = (await client.post(
+        f"/v1/rx/{rx['id']}/bundle-download")).json()
+    await login(client, LAB_TECH)
+    cur = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    await client.post(f"/v1/rx/{rx['id']}/check-in", json={},
+                      headers={"If-Match": str(cur["version"])})
+    # re-download: content identical -> same bundle reused
+    b2 = (await client.post(
+        f"/v1/rx/{rx['id']}/bundle-download")).json()
+    assert b2["bundle"]["id"] == b1["bundle"]["id"]
+    z2 = await httpx.AsyncClient().get(b2["download_url"])
+    t = await _pdf_text(z2.content)
+    assert "Status at generation: submitted" in t, t
+    detail = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    assert detail["status"] == "checked_in"
 
 
 # ---------------- F5: idempotency scope -----------------------------------------
