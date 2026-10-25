@@ -57,6 +57,28 @@ def _pg_dump(url: str, dest: str) -> None:
         check=True)
 
 
+def _psql(url: str, sql: str, docker_c: str | None) -> str:
+    if docker_c:
+        user, _hp, db = _url_parts(url)
+        r = subprocess.run(
+            ["docker", "exec", docker_c, "psql", "-U", user, "-d", db,
+             "-At", "-c", sql], check=True, capture_output=True, text=True)
+        return r.stdout.strip()
+    r = subprocess.run(
+        ["psql", url.replace("postgresql+asyncpg://", "postgresql://"),
+         "-At", "-c", sql], check=True, capture_output=True, text=True)
+    return r.stdout.strip()
+
+
+# Baseline tables whose row counts are captured into the manifest at backup
+# time and re-verified by scripts/restore.py (E2E-16) — a restore that lands
+# fewer rows must FAIL, not just print.
+BASELINE_TABLES = ("patient", "treatment_case", "rx", "rx_item",
+                   "rx_transition", "asset", "file_reference",
+                   "organization", "user_account", "audit_event",
+                   "alembic_version")
+
+
 def _s3(s):
     # proxies={} — local S3 endpoints must never route through a system
     # HTTP proxy (botocore honours macOS system proxy by default).
@@ -77,11 +99,17 @@ def main() -> int:
     os.makedirs(os.path.join(out, "objects"), exist_ok=True)
 
     dump = os.path.join(out, "db.dump")
-    _pg_dump(s.database_admin_url or s.database_url, dump)
+    db_url = s.database_admin_url or s.database_url
+    _pg_dump(db_url, dump)
 
     s3 = _s3(s)
     manifest = {"created_at": datetime.now(UTC).isoformat(),
-                "bucket": s.s3_bucket, "objects": []}
+                "bucket": s.s3_bucket, "objects": [],
+                "expected_counts": {}}
+    docker_c = os.environ.get("PG_DOCKER")
+    for t in BASELINE_TABLES:
+        manifest["expected_counts"][t] = int(
+            _psql(db_url, f"SELECT count(*) FROM {t}", docker_c))
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=s.s3_bucket):
         for o in page.get("Contents", []):

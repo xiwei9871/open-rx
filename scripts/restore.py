@@ -111,9 +111,23 @@ def main() -> int:
                         f"CREATE DATABASE {restore_db}"],
                        check=True, capture_output=True)
     _restore_db(restore_url, os.path.join(src, "db.dump"), docker_c)
-    for table in ("patient", "rx", "asset", "alembic_version"):
-        n = _psql(restore_url, f"SELECT count(*) FROM {table}", docker_c)
-        print(f"restore db: {table} = {n}")
+    # E2E-16: compare restored counts against the backup manifest baseline —
+    # any mismatch is a hard failure, not a printout.
+    expected_counts = manifest.get("expected_counts", {})
+    if not expected_counts:
+        print("DRILL FAILED — manifest has no expected_counts baseline")
+        return 1
+    mismatched = []
+    for table, expected in expected_counts.items():
+        n = int(_psql(restore_url, f"SELECT count(*) FROM {table}",
+                      docker_c))
+        status = "ok" if n == expected else "MISMATCH"
+        print(f"restore db: {table} = {n} (expected {expected}) {status}")
+        if n != expected:
+            mismatched.append(table)
+    if mismatched:
+        print(f"DRILL FAILED — row-count mismatch: {mismatched}")
+        return 1
 
     # --- S3 restore into scratch bucket + hash verify ---
     s3 = _s3(s)

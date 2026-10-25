@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """M5 auto-acceptance tool: mechanically validates the MVP completion matrix.
 
-Not a rubber stamp: for every feature row it requires VERIFIED status backed
-by named test files that actually exist in the repo, a backend API and a data
-model/migration reference where applicable, plus per-row milestone assignment.
-It also validates the E2E-01..16 evidence map against real test files.
+Not a rubber stamp:
+- every matrix row must be VERIFIED with REAL evidence — placeholders
+  (`—`, `N/A`, `TODO`, `TBD`, blank, `none`, `-`) are rejected outright;
+- `backend_api` must be a concrete `VERB /path` operation, or an explicitly
+  typed non-API proof: `SCRIPT:<path>` / `MANUAL_DRILL:<path>` /
+  `CI_JOB:<name>` / `DOC:<path>` — and the referenced file/job must exist;
+- `test_evidence` must name at least one existing test/artifact file, and
+  every `.py`/`.ts`/`.md` token must resolve on disk;
+- `data_model_migration`/`web_page` must be real content or the explicit
+  literal `NONE` — placeholders are rejected there too;
+- the E2E-01..16 map is checked against fragments inside real test files;
+- `--self-test` corrupts an in-memory copy of the matrix and proves the
+  validator itself fails on fake VERIFIED rows.
 
 Exit 0 + 'MVP_ALPHA_READY' only when every check passes.
 """
@@ -15,8 +24,12 @@ ROOT = Path(__file__).resolve().parent.parent
 MATRIX = ROOT / "docs/planning/mvp-completion-matrix.csv"
 DISPOSITION = ROOT / "docs/backlog/feature-disposition.csv"
 
-# E2E scenario -> list of (test file glob, required name fragments).
-# Sources: docs/backlog/tasks/EPIC-*.md acceptance criteria.
+PLACEHOLDERS = {"", "—", "-", "–", "N/A", "NA", "n/a", "TODO", "TBD",
+                "none", "None", "NONE?", "null", "x", "?"}
+TYPED_RE = re.compile(r"^(SCRIPT|MANUAL_DRILL|DOC|MODULE):(.+)$|^CI_JOB:(.+)$")
+API_RE = re.compile(r"(GET|POST|PUT|PATCH|DELETE)(\s*/\s*(GET|POST|PUT|PATCH|DELETE))?\s+/[A-Za-z0-9_{}/.|-]")
+
+# E2E scenario -> (description, [(test file, required name fragments)])
 E2E_MAP = {
     "E2E-01": ("rx create->submit flow", [
         ("apps/api/tests/test_rx.py", ["test_full_loop", "test_submit_requires_lab_and_items"]),
@@ -24,7 +37,7 @@ E2E_MAP = {
     ]),
     "E2E-02": ("draft save/restore keeps form state", [
         ("apps/api/tests/test_rx.py", ["test_unsubmit_before_checkin", "draft"]),
-        ("apps/web/tests/e2e/rx.spec.ts", ["unsubmit before check-in"]),
+        ("apps/web/tests/e2e/rx.spec.ts", ["draft persists across"]),
     ]),
     "E2E-03": ("cross-org 403, no existence leak (RLS)", [
         ("apps/api/tests/test_isolation.py", ["test_"]),
@@ -61,10 +74,10 @@ E2E_MAP = {
         ("apps/api/tests/test_rx_finalgate.py", ["test_prescription_pdf_has_real_content"]),
     ]),
     "E2E-12": ("interrupted upload leaves no half-file", [
-        ("apps/api/tests/test_assets.py", ["test_session_owner_only_and_expired", "test_expired_cleanup"]),
+        ("apps/api/tests/test_assets.py", ["test_session_owner_only_and_expired", "test_expired_cleanup", "interrupted"]),
     ]),
     "E2E-13": ("template apply/edit does not mutate source (sharing DEFER P1)", [
-        ("apps/api/tests/test_studio.py", ["test_template_crud", "test_template_persists_to_db"]),
+        ("apps/api/tests/test_studio.py", ["test_template_crud", "test_template_persists_to_db", "mutate"]),
     ]),
     "E2E-14": ("revoked share -> 403 + audit", [
         ("apps/api/tests/test_assets.py", ["test_reference_grant_revoke_cycle"]),
@@ -75,10 +88,12 @@ E2E_MAP = {
     ]),
     "E2E-16": ("backup->restore data/objects verifiable", [
         ("scripts/backup.py", ["pg_dump"]),
-        ("scripts/restore.py", ["sha256"]),
+        ("scripts/restore.py", ["sha256", "expected_counts", "mismatch"]),
         ("docs/audit/backup-restore-drill.md", ["verified"]),
     ]),
 }
+
+_required_fragments = 0
 
 
 def fail(msg):
@@ -86,44 +101,129 @@ def fail(msg):
     return 1
 
 
-def main():
+def _is_placeholder(v: str) -> bool:
+    return v.strip() in PLACEHOLDERS
+
+
+def _target_exists(path: str) -> bool:
+    """Resolve a repo-relative path (or basename glob) against the tree."""
+    import fnmatch
+    p = (ROOT / path)
+    if p.exists():
+        return True
+    base = os.path.basename(path)
+    for d in ("apps/api/tests", "apps/web/tests/e2e", "scripts", "tools",
+              "docs", "apps/api/app"):
+        for cand in (ROOT / d).glob("**/*"):
+            if cand.is_file() and fnmatch.fnmatch(cand.name, base):
+                return True
+    return False
+
+
+def _valid_impl(v: str) -> tuple[bool, str]:
+    """backend_api accepts API ops or typed evidence refs."""
+    if _is_placeholder(v):
+        return False, "placeholder"
+    ok_any, why = False, []
+    # may contain several ';' separated refs
+    for tok in re.split(r";\s*", v):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if API_RE.match(tok):
+            ok_any = True
+            continue
+        m = TYPED_RE.match(tok)
+        if m:
+            target = (m.group(2) or m.group(3)).strip()
+            target = re.sub(r"\s*\(.*$", "", target)  # strip (annotation)
+            if m.group(1) or tok.startswith("CI_JOB:"):
+                if tok.startswith("CI_JOB:"):
+                    # CI job must exist in the workflow file
+                    wf = (ROOT / ".github/workflows/validate.yml").read_text()
+                    if re.search(rf"^\s*{re.escape(target)}:\s*$", wf, re.M):
+                        ok_any = True
+                        continue
+                elif _target_exists(target):
+                    ok_any = True
+                    continue
+            why.append(f"typed ref target missing: {tok}")
+            continue
+        # bare descriptive text (e.g. 'sha256 verified at complete') is ok
+        # ONLY alongside at least one API/typed ref — flag it otherwise
+        if not ok_any:
+            why.append(f"unverifiable impl text: {tok[:60]}")
+    return ok_any, "; ".join(why)
+
+
+def _valid_evidence(v: str) -> tuple[bool, str]:
+    """test_evidence: every concrete file token must exist; at least one
+    resolvable test/drill artifact required overall."""
+    if _is_placeholder(v):
+        return False, "placeholder"
+    resolved = 0
+    problems = []
+    for tok in re.split(r"[+;,]\s*", v):
+        tok = tok.strip()
+        if not tok:
+            continue
+        m = TYPED_RE.match(tok)
+        if m:
+            target = (m.group(2) or m.group(3)).strip()
+            target = re.sub(r"\s*\(.*$", "", target)  # strip (annotation)
+            if tok.startswith("CI_JOB:"):
+                wf = (ROOT / ".github/workflows/validate.yml").read_text()
+                if re.search(rf"^\s*{re.escape(target)}:\s*$", wf, re.M):
+                    resolved += 1
+                else:
+                    problems.append(f"missing CI job: {target}")
+            elif _target_exists(target):
+                resolved += 1
+            else:
+                problems.append(f"missing typed target: {tok}")
+            continue
+        for f in re.findall(r"[\w./-]+\.(?:py|ts|md|yml|json)", tok):
+            if _target_exists(f):
+                resolved += 1
+            else:
+                problems.append(f"missing file: {f}")
+    if resolved == 0 and not problems:
+        problems.append("no executable/reviewable evidence reference")
+    return (resolved > 0 and not problems), "; ".join(problems)
+
+
+def _valid_aux(v: str) -> bool:
+    """data_model_migration / web_page: real text or literal NONE."""
+    return v.strip() == "NONE" or (v.strip() and not _is_placeholder(v))
+
+
+def _validate(rows):
     errors = 0
-    rows = list(csv.DictReader(open(MATRIX, newline="")))
-    disp_rows = csv.DictReader(open(DISPOSITION, newline=""))
-    mvp_ids = {r["feature_id"] for r in disp_rows
-               if r["phase"] == "MVP" and r["primary_disposition"] in ("CORE", "SIMPLIFY", "MANUAL")}
-
-    print(f"[1] matrix completeness: {len(rows)} rows vs {len(mvp_ids)} MVP features")
-    matrix_ids = {r["feature_id"] for r in rows}
-    if matrix_ids != mvp_ids:
-        missing = mvp_ids - matrix_ids
-        extra = matrix_ids - mvp_ids
-        errors += fail(f"missing rows: {sorted(missing)} / extra: {sorted(extra)}")
-
-    print("[2] per-row status + evidence")
     test_root = ROOT / "apps/api/tests"
-    e2e_root = ROOT / "apps/web/tests/e2e"
+    del test_root  # resolution handled by _target_exists
     for r in rows:
         fid = r["feature_id"]
         if r["status"] != "VERIFIED":
             errors += fail(f"{fid}: status={r['status']} (expected VERIFIED)")
             continue
-        if r["disposition"] == "CORE" and not r["backend_api"].strip():
-            errors += fail(f"{fid}: CORE row lacks backend_api evidence")
-        if not r["test_evidence"].strip():
-            errors += fail(f"{fid}: empty test_evidence")
-            continue
-        # every *.py / *.spec.ts file named in evidence must exist
-        for m in re.findall(r"[\w./-]+\.(?:py|ts)", r["test_evidence"]):
-            name = os.path.basename(m)
-            if not (any(test_root.glob(f"**/{name}")) or any(e2e_root.glob(f"**/{name}"))
-                    or (ROOT / m).exists() or any(ROOT.glob(f"scripts/{name}"))
-                    or any(ROOT.glob(f"docs/**/{name}")) or any(ROOT.glob(f"tools/**/{name}"))):
-                errors += fail(f"{fid}: evidence file not found: {m}")
+        ok, why = _valid_impl(r["backend_api"])
+        if r["disposition"] == "CORE" and not ok:
+            errors += fail(f"{fid}: backend_api invalid ({why})")
+        elif not ok:
+            errors += fail(f"{fid}: backend_api invalid ({why})")
+        ok, why = _valid_evidence(r["test_evidence"])
+        if not ok:
+            errors += fail(f"{fid}: test_evidence invalid ({why})")
+        for col in ("data_model_migration", "web_page"):
+            if not _valid_aux(r[col]):
+                errors += fail(f"{fid}: {col} is a placeholder")
         if not r["milestone"].strip():
             errors += fail(f"{fid}: no milestone assigned")
+    return errors
 
-    print("[3] E2E-01..16 evidence map")
+
+def _check_e2e():
+    errors = 0
     for eid, (desc, files) in E2E_MAP.items():
         ok = True
         for fpath, frags in files:
@@ -139,6 +239,76 @@ def main():
                     errors += fail(f"{eid}: {fpath} lacks '{frag}'")
         if ok:
             print(f"  ok    {eid}: {desc}")
+    return errors
+
+
+def _load_matrix(path=None):
+    return list(csv.DictReader(open(path or MATRIX, newline="")))
+
+
+def _self_test():
+    """Prove the gate rejects fake evidence. Returns exit-code int."""
+    import copy
+    base = _load_matrix()
+    cases = 0
+    bad = 0
+
+    def expect_fail(rows, why):
+        nonlocal cases, bad
+        cases += 1
+        if _validate(rows) == 0:
+            bad += 1
+            print(f"  SELF-TEST FAIL: accepted corrupt matrix ({why})")
+
+    # 1. a row flipped to placeholder evidence must fail
+    r = copy.deepcopy(base)
+    r[0]["test_evidence"] = "—"
+    expect_fail(r, "placeholder test_evidence")
+    # 2. blank backend_api must fail
+    r = copy.deepcopy(base)
+    r[0]["backend_api"] = ""
+    expect_fail(r, "blank backend_api")
+    # 3. N/A everywhere must fail
+    r = copy.deepcopy(base)
+    for k in ("backend_api", "test_evidence"):
+        r[1][k] = "N/A"
+    expect_fail(r, "N/A fields")
+    # 4. nonexistent evidence file must fail
+    r = copy.deepcopy(base)
+    r[0]["test_evidence"] = "tests/does_not_exist.py"
+    expect_fail(r, "phantom test file")
+    # 5. unverifiable prose impl must fail
+    r = copy.deepcopy(base)
+    r[0]["backend_api"] = "implemented correctly, trust me"
+    expect_fail(r, "prose impl")
+    # 6. missing milestone must fail
+    r = copy.deepcopy(base)
+    r[0]["milestone"] = ""
+    expect_fail(r, "missing milestone")
+
+    print(f"self-test: {cases} corrupt-matrix cases, {bad} wrongly accepted")
+    return 1 if bad else 0
+
+
+def main():
+    if "--self-test" in sys.argv:
+        return _self_test()
+    errors = 0
+    rows = _load_matrix()
+    disp_rows = csv.DictReader(open(DISPOSITION, newline=""))
+    mvp_ids = {r["feature_id"] for r in disp_rows
+               if r["phase"] == "MVP" and r["primary_disposition"] in ("CORE", "SIMPLIFY", "MANUAL")}
+
+    print(f"[1] matrix completeness: {len(rows)} rows vs {len(mvp_ids)} MVP features")
+    if {r["feature_id"] for r in rows} != mvp_ids:
+        missing = mvp_ids - {r["feature_id"] for r in rows}
+        errors += fail(f"missing rows: {sorted(missing)}")
+
+    print("[2] per-row status + evidence")
+    errors += _validate(rows)
+
+    print("[3] E2E-01..16 evidence map")
+    errors += _check_e2e()
 
     print("[4] hard-gate artifacts exist")
     for p in ["docs/audit/mvp-m0-baseline.md", "docs/audit/mvp-m1-acceptance.md",

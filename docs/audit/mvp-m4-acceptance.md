@@ -10,7 +10,7 @@ Date: 2026-10-25 · Milestone: M4 · Features: ASSET-010, SAFE-003/005/006/009/0
 | SAFE-003 限时链接 | presigned PUT/GET with TTL; prod HTTPS enforcement via preflight |
 | SAFE-005 文件校验 | sha256 + size + extension + STL structure; pluggable scan hook `ASSET_AV_ENGINE` (none/eicar_stub/adapter, fail-closed) |
 | SAFE-006 备份/恢复 | `scripts/backup.py` (pg_dump + S3 manifest w/ sha256), `scripts/restore.py` (scratch DB/bucket restore + per-object hash verify); drill: **321/321 objects verified, 0 failed**, row counts restored — `docs/audit/backup-restore-drill.md` |
-| SAFE-009 管理员导出 | `GET /v1/admin/export` org-scoped JSON (org, members sans credentials, locations, roster, patients, rx summary, asset manifest, connections); cross-org leakage test |
+| SAFE-009 管理员导出 | `GET /v1/admin/export` org-scoped JSON (org, members sans credentials, locations, roster, patients, rx summary, asset manifest); manifest carries presigned `download_url` + sha256 per object (no internal storage_key leaked; URLs expire 1h) — verified fetchable in `test_admin_export_download_url_fetches_bytes` on real S3 |
 | SAFE-010 配置检查 | prod guard in `Settings` (dev secrets/TOTP key refused at boot); `scripts/preflight.py` runtime validation (`preflight ok` / fail-closed); deploy checklist |
 
 ## Supporting docs added

@@ -34,7 +34,7 @@ migration, test evidence, milestone).
 | ID | Scenario | Evidence |
 |---|---|---|
 | E2E-01 | Rx create→submit full flow | test_rx.py, e2e rx.spec.ts |
-| E2E-02 | draft save/restore | test_rx.py, e2e rx.spec.ts |
+| E2E-02 | draft save/restore — real logout→login re-open | test_rx.py; e2e rx.spec.ts "draft persists across logout and fresh login" (browser-verified) |
 | E2E-03 | cross-org 403 (RLS) | test_isolation.py, test_rx.py |
 | E2E-04 | lab=accepted connection only | test_rx.py, test_connection_security.py |
 | E2E-05 | unsubmit before check-in | test_rx.py |
@@ -44,24 +44,26 @@ migration, test evidence, milestone).
 | E2E-09 | notify→approve→audit loop | test_collab.py, e2e collab.spec.ts |
 | E2E-10 | receive≠deliver lifecycle | test_fulfill.py, e2e fulfill.spec.ts |
 | E2E-11 | PDF regen w/ key fields | test_rx_finalgate.py (pypdf text assert) |
-| E2E-12 | interrupted upload → no half-file | test_assets.py (session expiry/cleanup) |
-| E2E-13 | template copy-edit isolation* | test_studio.py (*lab sharing DEFER P1) |
+| E2E-12 | interrupted upload → no half-file | test_assets.py::test_interrupted_upload_leaves_no_half_file (real S3: partial PUT → complete 422, 0 asset rows, staging object reaped) |
+| E2E-13 | template apply→edit does not mutate source* | test_studio.py::test_template_apply_edit_does_not_mutate_source (*lab sharing DEFER P1) |
 | E2E-14 | revoked share → 403+audit | test_assets.py |
 | E2E-15 | If-Match 409 concurrency | test_rx.py, test_rx_s1b1.py |
-| E2E-16 | backup→restore drill | scripts/backup.py+restore.py, drill doc |
+| E2E-16 | backup→restore w/ baseline compare | scripts/backup.py expected_counts + restore.py fail-on-mismatch; drill-2: 11/11 tables + 366/366 objects verified; tampered manifest → DRILL FAILED exit 1 |
 
 ## Test totals (latest local run)
 
 | Suite | Result |
 |---|---|
-| API full | 139 passed, 6 skipped (local non-S3 gate) |
+| API full | 146 passed, 6 skipped (local non-S3 gate) |
 | Contract | 3 passed |
-| Playwright | 15 passed (auth/patients/rx/studio/collab/fulfill) |
+| Playwright | 15 passed (auth/patients/rx/studio/collab/fulfill incl. real logout→login draft persistence) |
 | mvp_acceptance.py | MVP_ALPHA_READY |
 | Backup/restore drill | 321/321 S3 objects hash-verified; row counts restored |
 
 CI `asset-integration` hard gate runs test_assets.py + test_rx_s1b1.py +
-test_rx_finalgate.py against real Postgres+RustFS with `skipped=0` enforced.
+test_rx_finalgate.py + test_collab.py + test_m4.py against real
+Postgres+RustFS with `skipped=0` enforced — covers the M2 attachment-anchored
+comment test and the M4 AV-hook + export-URL tests on real infrastructure.
 
 ## Explicit non-claims
 
@@ -77,4 +79,5 @@ test_rx_finalgate.py against real Postgres+RustFS with `skipped=0` enforced.
   delegated user admin detail (IAM-005) — all DEFER'd by disposition.
 - Restore drill verifies object hashes + table counts; row-level hash diff
   is hardening, not a blocker.
-- Anti-virus engine ships as `none|eicar_stub`; real adapter interface ready.
+- Anti-virus engine ships as `none|eicar_stub` ONLY — a hook + negative-path
+  test, not real malware scanning, not a security certification.

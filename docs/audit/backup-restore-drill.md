@@ -7,37 +7,54 @@ Scope: full PostgreSQL dump + every object in `easyrs-assets-dev`.
 
 ```bash
 PG_DOCKER=easyrs-dev-postgres-1 \
-  apps/api/.venv/bin/python scripts/backup.py --out backups/drill-1
-# -> backup ok: backups/drill-1 (db.dump 218010 bytes, 321 objects)
+  apps/api/.venv/bin/python scripts/backup.py --out backups/drill-2
+# -> backup ok: backups/drill-2 (db.dump 207085 bytes, 366 objects)
 
 PG_DOCKER=easyrs-dev-postgres-1 \
-  apps/api/.venv/bin/python scripts/restore.py backups/drill-1
+  apps/api/.venv/bin/python scripts/restore.py backups/drill-2
 ```
 
-## Result
+## Result (drill-2)
+
+The backup manifest now records a DB acceptance baseline
+(`expected_counts` for 11 core tables); restore **fails hard** on any
+mismatch rather than just printing numbers:
 
 ```
-restore db: patient = 40
-restore db: rx = 59
-restore db: asset = 2
-restore db: alembic_version = 1
-restore s3: 321 verified, 0 failed -> bucket easyrs-assets-dev-restore
+restore db: patient = 13 (expected 13) ok
+restore db: treatment_case = 5 (expected 5) ok
+restore db: rx = 27 (expected 27) ok
+restore db: rx_item = 23 (expected 23) ok
+restore db: rx_transition = 77 (expected 77) ok
+restore db: asset = 1 (expected 1) ok
+restore db: file_reference = 4 (expected 4) ok
+restore db: organization = 6 (expected 6) ok
+restore db: user_account = 5 (expected 5) ok
+restore db: audit_event = 1064 (expected 1064) ok
+restore db: alembic_version = 1 (expected 1) ok
+restore s3: 366 verified, 0 failed -> bucket easyrs-assets-dev-restore
 restore drill ok
 ```
 
-- DB restored into scratch database `easyrs_restore` (never the live DB),
-  pg_restore ran server-version-matched inside the postgres container
-  (`PG_DOCKER`).
-- All 321 objects re-uploaded to scratch bucket `easyrs-assets-dev-restore`
-  and SHA-256-verified against the manifest after a fresh GET — 0 failures.
+## Negative-test evidence (failure actually triggers)
+
+A copy of the drill-2 manifest was tampered with
+(`expected_counts.patient += 999`) and restored:
+
+```
+restore db: patient = 13 (expected 1012) MISMATCH
+...
+DRILL FAILED — row-count mismatch: ['patient']
+```
+
+Exit code 1. A missing manifest likewise exits 1. The drill cannot pass
+silently on a short restore.
 
 ## Notes / gaps
 
-- Backup of `db.dump` captures the whole cluster schema incl. RLS policies
-  and constraints; verified by row counts + successful restore.
-- `PG_DOCKER` path exists because host libpq (v18) predates/succeeds the
-  server (v16) dialect — always dump with a matching major version.
+- `PG_DOCKER` runs version-matched pg tools inside the postgres container
+  (host libpq major ≠ server major otherwise).
+- S3 verification: every manifest object re-uploaded to the scratch bucket,
+  re-downloaded and sha256-verified — 366/366 passed, 0 failed.
 - Drill runs on the dev dataset (synthetic). A scheduled CI drill is a P1
-  item; the scripts are the same.
-- S3 object bytes verified, DB verified by counts only — a row-level hash
-  comparison is a possible hardening step.
+  item; the scripts and the fail-closed checks are the same.

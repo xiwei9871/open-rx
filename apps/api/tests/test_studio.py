@@ -140,3 +140,43 @@ async def test_template_persists_to_db(client, pa_org, admindb):
     row = (await admindb.execute(select(RxTemplate).where(
         RxTemplate.id == uuid.UUID(r.json()["id"])))).scalar_one()
     assert row.org_id == uuid.UUID(pa_org)
+
+
+async def test_template_apply_edit_does_not_mutate_source(client, pa_org):
+    """E2E-13 (MVP part): applying a template copies its payload into the
+    new Rx; editing that Rx afterwards must NOT mutate the stored template.
+    (Cross-org lab template sharing is DEFER target:P1 — not tested here.)"""
+    item = await _catalog_id(client, "HWL")
+    payload = {"items": [{"catalog_item_id": item, "arch": "upper",
+                          "tooth_ops": [{"tooth": "16", "op": "reset"}],
+                          "options": {"shade": "clear"}, "qty": 1}],
+               "notes": "standard retainer", "due_days_offset": 14}
+    t = (await client.post("/v1/templates",
+                           json={"name": "src-guard", "payload": payload})
+         ).json()
+
+    # practice applies the template: creates a draft Rx + copies items in
+    me = (await client.get("/v1/auth/me")).json()
+    pid = (await client.get("/v1/patients?external_ref=SYN-0001")
+           ).json()["items"][0]["id"]
+    rx = (await client.post("/v1/rx", json={"patient_id": pid})).json()
+    tpl = (await client.get(f"/v1/templates/{t['id']}")).json()
+    items = [{"appliance_id": i["catalog_item_id"], "arch": i["arch"],
+              "tooth_ops": i.get("tooth_ops", []),
+              "options": i.get("options"), "qty": i.get("qty", 1)}
+             for i in tpl["payload"]["items"]]
+    r = await client.put(f"/v1/rx/{rx['id']}/items", json={"items": items},
+                         headers={"If-Match": str(rx["version"])})
+    assert r.status_code == 200, r.text
+
+    # now edit the Rx hard: replace items with a different appliance
+    other = await _catalog_id(client, "RPN")
+    rx = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    r = await client.put(f"/v1/rx/{rx['id']}/items", json={"items": [
+        {"appliance_id": other, "arch": "lower", "qty": 3}]},
+        headers={"If-Match": str(rx["version"])})
+    assert r.status_code == 200, r.text
+
+    # source template must be byte-identical — copy-edit isolation
+    tpl2 = (await client.get(f"/v1/templates/{t['id']}")).json()
+    assert tpl2["payload"] == payload

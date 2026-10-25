@@ -148,3 +148,127 @@ async def test_seeded_patient_visible(client):
     assert r.status_code == 200 and len(r.json()["items"]) == 1
     p = r.json()["items"][0]
     assert p["first_name"] == "Ava" and p["last_name"] == "Synthetic"
+
+
+# ---------------- PAT-009: in-flight Rx delete guard -------------------------
+async def _rx_for_patient(client, pid: str) -> dict:
+    """Practice creates a draft Rx for the given patient."""
+    me = (await client.get("/v1/auth/me")).json()
+    conns = (await client.get(
+        f"/v1/org-connections?org_id={me['org_id']}")).json()["items"]
+    lab = [c for c in conns if c["status"] == "accepted"][0]["lab_org_id"]
+    r = await client.post("/v1/rx", json={"patient_id": pid,
+                                          "lab_org_id": lab})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+async def _submit_rx(client, rx: dict) -> dict:
+    cat = (await client.get("/v1/catalog/parts")).json()["items"][0]["id"]
+    r = await client.put(f"/v1/rx/{rx['id']}/items",
+                         json={"items": [{"appliance_id": cat,
+                                          "arch": "upper"}]},
+                         headers={"If-Match": str(rx["version"])})
+    assert r.status_code == 200, r.text
+    rx = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    r = await client.post(f"/v1/rx/{rx['id']}/submit", json={
+        "signature_name": "Dr. Demo", "confirm_submit": True},
+        headers={"Idempotency-Key": uuid.uuid4().hex,
+                 "If-Match": str(rx["version"])})
+    assert r.status_code == 200, r.text
+    return (await client.get(f"/v1/rx/{rx['id']}")).json()
+
+
+async def test_delete_blocked_by_inflight_rx(client):
+    """PAT-009: draft / submitted Rx block patient deletion."""
+    await login(client, "staff@pa.dev")
+    pid = (await _create(client)).json()["id"]
+    rx = await _rx_for_patient(client, pid)
+
+    await login(client, "admin@pa.dev")
+    r = await client.delete(f"/v1/patients/{pid}")
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["code"] == "patient_has_inflight_rx"
+    assert r.json()["detail"]["inflight_rx"][0]["id"] == rx["id"]
+
+    # submitted stays in-flight too
+    await login(client, "doctor@pa.dev")
+    rx = await _submit_rx(client, rx)
+    await login(client, "admin@pa.dev")
+    r = await client.delete(f"/v1/patients/{pid}")
+    assert r.status_code == 409
+    # patient NOT deleted, still readable
+    assert (await client.get(f"/v1/patients/{pid}")).status_code == 200
+
+
+async def test_delete_allowed_without_rx(client):
+    await login(client, "staff@pa.dev")
+    pid = (await _create(client)).json()["id"]
+    await login(client, "admin@pa.dev")
+    assert (await client.delete(f"/v1/patients/{pid}")).status_code == 204
+
+
+async def test_delete_completed_but_inflight_fulfillment_blocked(client):
+    """completed Rx still in the delivery pipeline (qc_pending..received)
+    counts as in-flight — the goods are literally in transit."""
+    await login(client, "doctor@pa.dev")
+    pid = (await _create(client)).json()["id"]
+    rx = await _rx_for_patient(client, pid)
+    rx = await _submit_rx(client, rx)
+
+    await login(client, "tech@la.dev")
+    r = await client.post(f"/v1/rx/{rx['id']}/check-in", json={},
+                          headers={"If-Match": str(rx["version"])})
+    assert r.status_code == 200, r.text
+    rx = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    r = await client.post(f"/v1/rx/{rx['id']}/complete", json={},
+                          headers={"If-Match": str(rx["version"])})
+    assert r.status_code == 200, r.text
+
+    await login(client, "admin@pa.dev")
+    # completed but qc_pending -> still in-flight
+    r = await client.delete(f"/v1/patients/{pid}")
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "patient_has_inflight_rx"
+
+
+async def test_delete_allowed_after_delivered(client):
+    """Terminal loop: completed + delivered (and cancelled) release the
+    patient; signature/approval history rows are untouched."""
+    await login(client, "doctor@pa.dev")
+    pid = (await _create(client)).json()["id"]
+    rx = await _rx_for_patient(client, pid)
+    rx = await _submit_rx(client, rx)
+
+    await login(client, "tech@la.dev")
+    for op, body in (("check-in", {}), ("complete", {}),
+                     ("qc", {"result": "pass", "note": "ok"}),
+                     ("ship", {"carrier": "UPS", "tracking_number": "1Z999"})):
+        rx = (await client.get(f"/v1/rx/{rx['id']}")).json()
+        r = await client.post(f"/v1/rx/{rx['id']}/{op}", json=body,
+                              headers={"If-Match": str(rx["version"])})
+        assert r.status_code in (200, 201), (op, r.text)
+
+    await login(client, "doctor@pa.dev")
+    for op in ("receive", "deliver"):
+        rx = (await client.get(f"/v1/rx/{rx['id']}")).json()
+        r = await client.post(f"/v1/rx/{rx['id']}/{op}", json={},
+                              headers={"If-Match": str(rx["version"])})
+        assert r.status_code == 200, (op, r.text)
+
+    await login(client, "admin@pa.dev")
+    r = await client.delete(f"/v1/patients/{pid}")
+    assert r.status_code == 204, r.text
+    # Rx row + signature survive the soft delete (history not destroyed)
+    await login(client, "doctor@pa.dev")
+    got = (await client.get(f"/v1/rx/{rx['id']}")).json()
+    assert got["signature_name"] == "Dr. Demo"
+    assert got["fulfillment_status"] == "delivered"
+
+
+async def test_delete_blocked_for_lab_admin(client):
+    """Lab admin holds no patient:delete at all — 403 not 409."""
+    await login(client, "staff@pa.dev")
+    pid = (await _create(client)).json()["id"]
+    await login(client, "admin@la.dev")
+    assert (await client.delete(f"/v1/patients/{pid}")).status_code == 403

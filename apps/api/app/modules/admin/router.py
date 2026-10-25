@@ -2,22 +2,28 @@
 
 Exports the caller's own org only — never cross-tenant, never credentials,
 password hashes, sessions, or TOTP secrets. Asset entries are a manifest
-(id/sha256/bytes/key) — bytes are fetched through the normal signed-URL
-flow, so export carries pointers, not copies.
+carrying a short-lived presigned GET per object plus its sha256 — an admin
+can actually retrieve and verify each file, and no internal storage key is
+exposed. URLs expire (`EXPORT_URL_TTL_SECONDS`); re-export to refresh.
 """
-import uuid
+import asyncio
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
 from app.audit import record
+from app.config import get_settings
 from app.deps import Db, Me, require_perm
 from app.modules.assets.models import Asset
 from app.modules.clinical.models import Patient
 from app.modules.iam.models import (Location, Membership, Organization,
                                     RosterMember, UserAccount)
 from app.modules.rx.models import Rx
+from app.storage import s3_presign
+
+_s = get_settings()
+EXPORT_URL_TTL_SECONDS = 3600
 
 router = APIRouter(tags=["admin"])
 
@@ -46,7 +52,14 @@ async def admin_export(request: Request, db: Db, p: Me,
     record(db, action="admin.export", object_type="organization",
            object_id=p.org.id, tenant_id=p.tenant_id, org_id=p.org.id,
            actor_user_id=p.user.id, request=request,
-           after={"patients": len(patients), "rx": len(rxs)})
+           after={"patients": len(patients), "rx": len(rxs),
+                  "assets": len(assets)})
+
+    async def _dl_url(key: str) -> str:
+        return await asyncio.to_thread(
+            s3_presign().generate_presigned_url, "get_object",
+            Params={"Bucket": _s.s3_bucket, "Key": key},
+            ExpiresIn=EXPORT_URL_TTL_SECONDS)
 
     return {
         "exported_at": datetime.now(UTC).isoformat(),
@@ -81,6 +94,8 @@ async def admin_export(request: Request, db: Db, p: Me,
         "asset_manifest": [{
             "id": str(a.id), "sha256": a.sha256, "kind": a.kind,
             "jaw": a.jaw, "bytes": a.bytes,
-            "format_status": a.format_status, "storage_key": a.storage_key,
+            "format_status": a.format_status,
+            "download_url": await _dl_url(a.storage_key),
+            "url_expires_in_seconds": EXPORT_URL_TTL_SECONDS,
         } for a in assets],
     }

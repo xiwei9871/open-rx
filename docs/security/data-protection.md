@@ -28,6 +28,10 @@
   byte-exact at completion, STL structural validation, pluggable scan hook
   (`ASSET_AV_ENGINE=none|eicar_stub|<adapter>` — fail-closed on unknown
   engine), expired staging objects are reaped.
+- **Honest AV status**: Alpha ships `none` and a sentinel `eicar_stub` only.
+  That is a hook point plus a negative-path test — it is NOT real malware
+  scanning and NOT a production security certification. A real deployment
+  must wire an actual engine behind the adapter interface.
 
 ## Retention & deletion
 

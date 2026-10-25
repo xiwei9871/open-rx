@@ -121,3 +121,38 @@ test.describe("rx core loop", () => {
     await expect(page.getByRole("status")).toContainText("Saved");
   });
 });
+
+// E2E-02: a saved draft persists fully across logout -> login — fields,
+// items and notes survive a fresh session (server-side draft, not local).
+test.describe("rx draft persistence", () => {
+  test("draft persists across logout and fresh login", async ({ page }) => {
+    await signIn(page, PRACTICE.email, PRACTICE.password);
+    await page.getByRole("button", { name: "Prescriptions" }).click();
+    await page.getByRole("button", { name: "New Rx" }).click();
+    await selectByText(page, "Patient", "Synthetic, Ava");
+    await selectByText(page, "Laboratory", "Friendly Lab");
+    await page.getByLabel("Due date").fill("2031-02-20");
+    await selectByText(page, "catalog", "Hawley retainer");
+    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByLabel("Notes").fill("draft-e2e02-notes");
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.getByRole("heading", { name: /— Saved/ })).toBeVisible();
+    const rxNum = (await page.getByRole("heading", { level: 2 }).innerText())
+      .split(" ")[0];
+
+    // leave the page entirely, sign out, sign back in
+    await page.getByRole("button", { name: "Patients" }).click();
+    await expect(page.getByRole("heading", { name: "Patients" })).toBeVisible();
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await signIn(page, PRACTICE.email, PRACTICE.password);
+    await page.getByRole("button", { name: "Prescriptions" }).click();
+    await page.getByRole("cell", { name: rxNum }).click();
+
+    // nothing was lost: status, item, notes, due date all still present
+    await expect(page.getByRole("heading", { name: /— Saved/ })).toBeVisible();
+    await expect(page.locator("li", { hasText: "HWL — Hawley retainer" }))
+      .toBeVisible();
+    await expect(page.getByLabel("Notes")).toHaveValue("draft-e2e02-notes");
+    await expect(page.getByLabel("Due date")).toHaveValue("2031-02-20");
+  });
+});
