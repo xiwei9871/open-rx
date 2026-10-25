@@ -75,6 +75,8 @@ class Rx(Base, IdMixin, CreatedAtMixin):
         UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True)
+    completed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
     signature_name: Mapped[str | None] = mapped_column(String(200),
                                                        nullable=True)
     # exact version the submit signature binds (persisted — Final Gate F1)
@@ -187,6 +189,55 @@ class RxComment(Base, IdMixin, CreatedAtMixin):
         UUID(as_uuid=True), ForeignKey("membership.id"))
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("rx_comment.id"), nullable=True)
+    # COM-001: optional anchor to a specific attachment reference.
+    file_reference_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("file_reference.id"), nullable=True)
     body: Mapped[str] = mapped_column(String(4000))
     edited_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True)
+
+
+class Notification(Base, IdMixin, CreatedAtMixin):
+    """COM-002/004/007: structured clinical/issue message to a recipient org
+    inbox. approval_required binds rx_version_at_creation — a mutated Rx
+    makes the request stale (decide -> 409 version_drift)."""
+    __tablename__ = "notification"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id"), index=True)
+    rx_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rx.id"), index=True)
+    created_by_org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id"))
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    kind: Mapped[str] = mapped_column(String(24))
+    subject: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    rx_version_at_creation: Mapped[int | None] = mapped_column(
+        Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="unread",
+                                        server_default="unread")
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"), nullable=True)
+
+
+class Approval(Base, IdMixin, CreatedAtMixin):
+    """COM-004/E2E-09: one signed decision per approval notification,
+    bound to the Rx version at request time (business record — no claim
+    of jurisdiction-specific legal e-signature compliance)."""
+    __tablename__ = "approval"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    notification_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notification.id"), unique=True)
+    rx_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rx.id"), index=True)
+    rx_version: Mapped[int] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(String(16))
+    signature_name: Mapped[str] = mapped_column(String(200))
+    comment: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    decided_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_account.id"))
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

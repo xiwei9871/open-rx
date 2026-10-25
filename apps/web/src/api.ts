@@ -360,6 +360,7 @@ const CommentSchema = z.object({
   body: z.string(),
   created_at: z.string(),
   parent_id: z.string().nullable(),
+  file_reference_id: z.string().nullable(),
 });
 export type RxComment = z.infer<typeof CommentSchema>;
 
@@ -442,6 +443,15 @@ export async function unsubmitRx(id: string, version: number,
 export async function checkInRx(id: string, version: number,
                                 note?: string): Promise<Rx> {
   return req(RxSchema, `/api/v1/rx/${id}/check-in`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "If-Match": String(version) },
+    body: JSON.stringify({ note: note ?? null }),
+  });
+}
+
+export async function completeRx(id: string, version: number,
+                                 note?: string): Promise<Rx> {
+  return req(RxSchema, `/api/v1/rx/${id}/complete`, {
     method: "POST",
     headers: { ...JSON_HEADERS, "If-Match": String(version) },
     body: JSON.stringify({ note: note ?? null }),
@@ -621,4 +631,81 @@ export async function listRxHistory(patientId: string): Promise<Rx[]> {
   const r = await req(z.object({ items: z.array(RxSchema) }),
     `/api/v1/patients/${patientId}/rx-history`);
   return r.items;
+}
+
+// ---------- M2: notifications / approvals ----------
+
+const NotificationSchema = z.object({
+  id: z.string(), rx_id: z.string(), created_by_org_id: z.string(),
+  kind: z.string(), subject: z.string(), body: z.string().nullable(),
+  rx_version_at_creation: z.number().nullable(), status: z.string(),
+  resolved_at: z.string().nullable(), created_at: z.string(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
+const NotificationPageSchema = z.object({
+  items: z.array(NotificationSchema),
+  counts: z.object({ unread: z.number(), approval_pending: z.number() }),
+});
+
+export async function listNotifications(kind?: string, status?: string) {
+  const qs = [kind && `kind=${kind}`, status && `status=${status}`]
+    .filter(Boolean).join("&");
+  return req(NotificationPageSchema,
+    `/api/v1/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export async function createNotification(body: {
+  rx_id: string; kind: "info" | "ack_required" | "approval_required";
+  subject: string; body?: string;
+}): Promise<Notification> {
+  return req(NotificationSchema, "/api/v1/notifications", {
+    method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body),
+  });
+}
+
+export async function markNotificationRead(id: string): Promise<Notification> {
+  return req(NotificationSchema, `/api/v1/notifications/${id}/read`,
+    { method: "POST", headers: JSON_HEADERS });
+}
+
+const ApprovalSchema = z.object({
+  id: z.string(), notification_id: z.string(), rx_id: z.string(),
+  rx_version: z.number(), decision: z.string(),
+  signature_name: z.string(), comment: z.string().nullable(),
+  decided_by_user_id: z.string(), decided_at: z.string(),
+});
+export type Approval = z.infer<typeof ApprovalSchema>;
+
+export async function decideNotification(id: string, body: {
+  decision: "approved" | "rejected"; signature_name: string;
+  comment?: string;
+}): Promise<Approval> {
+  return req(ApprovalSchema, `/api/v1/notifications/${id}/decision`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify(body),
+  });
+}
+
+const RxAttachmentSchema = z.object({
+  id: z.string(), asset_id: z.string(), role: z.string(),
+  asset: z.object({ id: z.string(), kind: z.string(), jaw: z.string(),
+                    bytes: z.number(), sha256: z.string(),
+                    format_status: z.string(), created_at: z.string() }),
+});
+export type RxAttachment = z.infer<typeof RxAttachmentSchema>;
+
+export async function listRxAttachments(rxId: string): Promise<RxAttachment[]> {
+  const r = await req(z.object({ items: z.array(RxAttachmentSchema) }),
+    `/api/v1/rx/${rxId}/attachments`);
+  return r.items;
+}
+
+export async function createRxCommentEx(rxId: string, body: string,
+                                        fileReferenceId?: string): Promise<RxComment> {
+  return req(CommentSchema, `/api/v1/rx/${rxId}/comments`, {
+    method: "POST", headers: JSON_HEADERS,
+    body: JSON.stringify({ body, file_reference_id: fileReferenceId ?? null }),
+  });
 }

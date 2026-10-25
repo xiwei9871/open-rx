@@ -31,14 +31,15 @@ from app.modules.clinical.models import Patient, TreatmentCase
 from app.modules.iam.models import (Location, OrgConnection, Organization,
                                     RosterMember)
 from app.storage import s3, s3_presign
-from app.modules.rx.models import (CatalogItem, IdempotencyRecord, Rx,
-                                   RxBundle, RxComment, RxItem, RxTemplate,
-                                   RxTransition)
-from app.modules.rx.schemas import (AttachmentCreate, CatalogItemOut,
-                                    CommentCreate, CommentOut, RxBundleOut,
-                                    RxCheckIn, RxCreate, RxItemOut,
-                                    RxItemsReplace, RxOut, RxSubmit,
-                                    RxTemplateCreate, RxTemplateOut,
+from app.modules.rx.models import (Approval, CatalogItem, IdempotencyRecord,
+                                   Notification, Rx, RxBundle, RxComment,
+                                   RxItem, RxTemplate, RxTransition)
+from app.modules.rx.schemas import (ApprovalOut, AttachmentCreate,
+                                    CatalogItemOut, CommentCreate, CommentOut,
+                                    DecisionRequest, NotificationCreate,
+                                    NotificationOut, RxBundleOut, RxCheckIn,
+                                    RxCreate, RxItemOut, RxItemsReplace, RxOut,
+                                    RxSubmit, RxTemplateCreate, RxTemplateOut,
                                     RxTransitionOut, RxUnsubmit, RxUpdate)
 
 router = APIRouter(tags=["prescriptions"])
@@ -602,6 +603,33 @@ async def check_in_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
     return await _rx_out(db, rx)
 
 
+@router.post("/rx/{rx_id}/complete", operation_id="completeRx")
+async def complete_rx(rx_id: uuid.UUID, request: Request, db: Db, p: Me,
+                      body: RxCheckIn | None = None,
+                      _g=Depends(require_perm("rx:write")),
+                      if_match: int | None = Header(default=None)):
+    """LAB-019: lab marks the order complete (production done). checked_in
+    -> completed; idempotent repeat returns the same state."""
+    await limit_writes(p)
+    rx = await _rx_for_lab_write(db, p, rx_id, request)
+    if rx.status == "completed":
+        return await _rx_out(db, rx)  # idempotent repeat
+    _require_if_match(if_match, rx.version)
+    if rx.status != "checked_in":
+        raise _illegal("Only checked-in prescriptions can be completed")
+    rx.status = "completed"
+    rx.completed_at = datetime.now(UTC)
+    rx.completed_by_user_id = p.user.id
+    rx.version += 1
+    _record_transition(db, p, rx, "checked_in", "completed", via="button",
+                       note=(body or RxCheckIn()).note)
+    record(db, action="rx.completed", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request)
+    await tenant_commit(db, p)
+    return await _rx_out(db, rx)
+
+
 def _apply_checkin(db: AsyncSession, p: Principal, rx: Rx, via: str,
                    note: str | None = None) -> None:
     rx.status = "checked_in"
@@ -738,6 +766,30 @@ async def download_rx_bundle(rx_id: uuid.UUID, request: Request, db: Db,
             "download_url": url, "expires_in": _BUNDLE_URL_TTL}
 
 
+@router.get("/rx/{rx_id}/attachments", response_model=dict,
+            operation_id="listRxAttachments")
+async def list_rx_attachments(rx_id: uuid.UUID, request: Request, db: Db,
+                              p: Me, _g=Depends(require_perm("rx:read"))):
+    """Live file references on the Rx + asset metadata (id/kind/jaw/bytes)."""
+    from app.modules.assets.models import Asset, FileReference
+    await _rx_for_read(db, p, rx_id, request)
+    rows = (await db.execute(
+        select(FileReference, Asset)
+        .join(Asset, Asset.id == FileReference.asset_id)
+        .where(FileReference.subject_type == "rx",
+               FileReference.subject_id == rx_id,
+               FileReference.revoked_at.is_(None)))).all()
+    return {"items": [{
+        "id": str(ref.id), "asset_id": str(asset.id),
+        "subject_type": "rx", "subject_id": str(rx_id),
+        "role": ref.role, "revoked_at": None,
+        "asset": {"id": str(asset.id), "kind": asset.kind,
+                  "jaw": asset.jaw, "bytes": asset.bytes,
+                  "sha256": asset.sha256, "format_status": asset.format_status,
+                  "created_at": asset.created_at.isoformat()},
+    } for ref, asset in rows]}
+
+
 @router.post("/rx/{rx_id}/attachments", status_code=201,
              operation_id="attachToRx")
 async def attach_to_rx(rx_id: uuid.UUID, body: AttachmentCreate,
@@ -810,9 +862,19 @@ async def create_rx_comment(rx_id: uuid.UUID, body: CommentCreate,
             raise HTTPException(status_code=422, detail={
                 "code": "invalid_parent",
                 "message": "parent_id is not a comment on this Rx"})
+    if body.file_reference_id:
+        from app.modules.assets.models import FileReference
+        ref = await db.get(FileReference, body.file_reference_id)
+        if (not ref or ref.tenant_id != p.tenant_id
+                or ref.subject_type != "rx" or ref.subject_id != rx.id
+                or ref.revoked_at is not None):
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_file_reference",
+                "message": "file_reference_id is not a live attachment on this Rx"})
     c = RxComment(tenant_id=p.tenant_id, rx_id=rx.id,
                   author_membership_id=p.membership.id, body=body.body,
-                  parent_id=body.parent_id)
+                  parent_id=body.parent_id,
+                  file_reference_id=body.file_reference_id)
     db.add(c)
     await db.flush()
     record(db, action="rx.comment_created", object_type="rx", object_id=rx.id,
@@ -854,3 +916,142 @@ async def patient_rx_history(patient_id: uuid.UUID, request: Request,
            if len(rows) > lim else None)
     return {"items": [RxOut.model_validate(r) for r in rows[:lim]],
             "next_cursor": nxt}
+
+
+# ---------------- notifications / approvals (M2) -----------------------------
+@router.get("/notifications", response_model=dict,
+            operation_id="listNotifications")
+async def list_notifications(db: Db, p: Me,
+                             kind: str | None = None,
+                             status: str | None = None):
+    """Own-org inbox — message center (COM-007) with todo counts."""
+    conds = [Notification.org_id == p.org.id,
+             Notification.tenant_id == p.tenant_id]
+    if kind:
+        conds.append(Notification.kind == kind)
+    if status:
+        conds.append(Notification.status == status)
+    rows = (await db.execute(
+        select(Notification).where(*conds)
+        .order_by(Notification.created_at.desc()))).scalars().all()
+    unread = (await db.execute(select(func.count()).select_from(Notification)
+        .where(Notification.org_id == p.org.id,
+               Notification.status == "unread"))).scalar_one()
+    pending_approvals = (await db.execute(
+        select(func.count()).select_from(Notification).where(
+            Notification.org_id == p.org.id,
+            Notification.kind == "approval_required",
+            Notification.status != "resolved"))).scalar_one()
+    return {"items": [NotificationOut.model_validate(n) for n in rows],
+            "counts": {"unread": unread,
+                       "approval_pending": pending_approvals}}
+
+
+@router.post("/notifications", response_model=NotificationOut, status_code=201,
+             operation_id="createNotification")
+async def create_notification(body: NotificationCreate, request: Request,
+                              db: Db, p: Me,
+                              _g=Depends(require_perm("rx:write"))):
+    """Structured issue/clinical message to the OTHER Rx party's inbox:
+    lab -> practice or practice -> lab (LAB-002, COM-002/004)."""
+    await limit_writes(p)
+    rx = await _rx_for_read(db, p, body.rx_id, request)
+    if rx.practice_org_id == p.org.id:
+        recipient = rx.lab_org_id
+    elif rx.lab_org_id == p.org.id:
+        recipient = rx.practice_org_id
+    else:  # pragma: no cover — _rx_for_read already gates party visibility
+        await _deny(db, request, p, "not_rx_party")
+    if not recipient:
+        raise HTTPException(status_code=422, detail={
+            "code": "no_counterparty",
+            "message": "Rx has no receiving lab yet"})
+    n = Notification(
+        tenant_id=p.tenant_id, org_id=recipient, rx_id=rx.id,
+        created_by_org_id=p.org.id, created_by_user_id=p.user.id,
+        kind=body.kind, subject=body.subject, body=body.body,
+        rx_version_at_creation=(rx.version
+                                if body.kind == "approval_required" else None))
+    db.add(n)
+    await db.flush()
+    record(db, action="notification.created", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request,
+           after={"kind": body.kind, "to_org": str(recipient)})
+    await tenant_commit(db, p)
+    return n
+
+
+@router.post("/notifications/{notification_id}/read",
+             response_model=NotificationOut, operation_id="markNotificationRead")
+async def mark_notification_read(notification_id: uuid.UUID, request: Request,
+                                 db: Db, p: Me):
+    n = await db.get(Notification, notification_id, with_for_update=True)
+    if not n or n.tenant_id != p.tenant_id or n.org_id != p.org.id:
+        await _deny(db, request, p, "notification_not_visible")
+    if n.status == "unread":
+        # ack_required is consumed by an acknowledge-read; info stays 'read'
+        n.status = "resolved" if n.kind == "ack_required" else "read"
+        if n.status == "resolved":
+            n.resolved_at = datetime.now(UTC)
+            n.resolved_by_user_id = p.user.id
+        await db.flush()
+        await tenant_commit(db, p)
+    return n
+
+
+@router.post("/notifications/{notification_id}/decision",
+             response_model=ApprovalOut, operation_id="decideNotification")
+async def decide_notification(notification_id: uuid.UUID, body: DecisionRequest,
+                              request: Request, db: Db, p: Me,
+                              _g=Depends(require_perm("rx:write")),
+                              idem: str | None = Header(
+                                  default=None, alias="Idempotency-Key")):
+    """Signed approve/reject bound to the Rx version at request time.
+    Stale (rx mutated since request) -> 409 version_drift; the lab must
+    re-request — old conclusions never carry over silently (E2E-09)."""
+    await limit_writes(p)
+    if not idem:
+        raise HTTPException(status_code=428, detail={
+            "code": "precondition_required",
+            "message": "Idempotency-Key required"})
+    n = await db.get(Notification, notification_id, with_for_update=True)
+    if not n or n.tenant_id != p.tenant_id or n.org_id != p.org.id:
+        await _deny(db, request, p, "notification_not_visible")
+    if n.kind != "approval_required":
+        raise HTTPException(status_code=422, detail={
+            "code": "not_approval", "message": "Notification is not an approval request"})
+    existing = (await db.execute(select(Approval).where(
+        Approval.notification_id == n.id))).scalar_one_or_none()
+    if existing:
+        return existing  # immutable decision — replay-safe (double-click)
+    if not body.signature_name.strip():
+        raise HTTPException(status_code=422, detail={
+            "code": "signature_required", "message": "signature_name required"})
+    rx = await db.get(Rx, n.rx_id)
+    if not rx or rx.version != n.rx_version_at_creation:
+        raise HTTPException(status_code=409, detail={
+            "code": "version_drift",
+            "message": "Rx changed since the request; re-confirm required"})
+    ap = Approval(tenant_id=p.tenant_id, notification_id=n.id, rx_id=rx.id,
+                  rx_version=rx.version, decision=body.decision,
+                  signature_name=body.signature_name.strip(),
+                  comment=body.comment, decided_by_user_id=p.user.id,
+                  decided_at=datetime.now(UTC))
+    db.add(ap)
+    n.status = "resolved"
+    n.resolved_at = datetime.now(UTC)
+    n.resolved_by_user_id = p.user.id
+    # FLOW-016: approval lands in the auditable transition trail.
+    db.add(RxTransition(tenant_id=p.tenant_id, rx_id=rx.id,
+                        from_status=rx.status, to_status=rx.status,
+                        via="approval", actor_user_id=p.user.id,
+                        actor_org_id=p.org.id,
+                        note=f"{body.decision}: {body.signature_name.strip()}"))
+    await db.flush()
+    record(db, action="approval.decided", object_type="rx", object_id=rx.id,
+           tenant_id=p.tenant_id, org_id=p.org.id, actor_user_id=p.user.id,
+           request=request,
+           after={"decision": body.decision, "rx_version": rx.version})
+    await tenant_commit(db, p)
+    return ap

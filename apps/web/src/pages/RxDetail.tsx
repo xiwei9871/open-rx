@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-  checkInRx, createRxComment, downloadRxBundle, getRx, listCatalog,
-  listRxComments, listRxTransitions, replaceRxItems, submitRx, unsubmitRx,
-  updateRx, type CatalogItem, type Me, type Rx, type RxComment,
+  checkInRx, completeRx, createNotification, createRxCommentEx,
+  downloadRxBundle, getRx,
+  listCatalog, listRxAttachments, listRxComments, listRxTransitions,
+  replaceRxItems, submitRx, unsubmitRx, updateRx,
+  type CatalogItem, type Me, type Rx, type RxAttachment, type RxComment,
   type RxTransition,
 } from "../api";
+import StlPreview from "../components/StlPreview";
 
 const input = { display: "block", width: "100%", marginBottom: 8, padding: 4 } as const;
 
@@ -23,6 +26,12 @@ export default function RxDetail({ me, rxId, onBack }: {
   const [comments, setComments] = useState<RxComment[]>([]);
   const [trail, setTrail] = useState<RxTransition[]>([]);
   const [comment, setComment] = useState("");
+  const [commentRef, setCommentRef] = useState("");
+  const [attachments, setAttachments] = useState<RxAttachment[]>([]);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [issueKind, setIssueKind] = useState<"info" | "ack_required" | "approval_required">("info");
+  const [issueSubject, setIssueSubject] = useState("");
+  const [issueBody, setIssueBody] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editDue, setEditDue] = useState("");
   const [sig, setSig] = useState("");
@@ -32,11 +41,13 @@ export default function RxDetail({ me, rxId, onBack }: {
   const [info, setInfo] = useState("");
 
   async function reload() {
-    const [r, cs, ts] = await Promise.all([
-      getRx(rxId), listRxComments(rxId), listRxTransitions(rxId)]);
+    const [r, cs, ts, at] = await Promise.all([
+      getRx(rxId), listRxComments(rxId), listRxTransitions(rxId),
+      listRxAttachments(rxId)]);
     setRx(r);
     setComments(cs);
     setTrail(ts);
+    setAttachments(at);
     setEditNotes(r.notes ?? "");
     setEditDue(r.due_date ?? "");
   }
@@ -175,6 +186,11 @@ export default function RxDetail({ me, rxId, onBack }: {
             () => checkInRx(rx.id, rx.version, "received at bench"),
             "Checked in")}>Check in</button>
         )}
+        {isLab && rx.status === "checked_in" && (
+          <button onClick={() => act(
+            () => completeRx(rx.id, rx.version, "production complete"),
+            "Completed")}>Mark complete</button>
+        )}
         {rx.status !== "draft" && (
           <button onClick={() => act(async () => {
             const b = await downloadRxBundle(rx.id);
@@ -186,19 +202,74 @@ export default function RxDetail({ me, rxId, onBack }: {
         )}
       </div>
 
+      <h3>Attachments</h3>
+      {attachments.length === 0 ? <p>No attachments.</p> : (
+        <ul>{attachments.map((a) => (
+          <li key={a.id}>
+            {a.asset.kind}/{a.asset.jaw} — {a.role} — {a.asset.bytes} bytes —
+            sha256 {a.asset.sha256.slice(0, 12)}…
+            {a.asset.kind === "stl" && (
+              <>{" "}<button type="button" aria-label={`preview ${a.id}`}
+                onClick={() => setPreviewId(
+                  previewId === a.asset_id ? null : a.asset_id)}>Preview</button></>
+            )}
+            {previewId === a.asset_id && <StlPreview assetId={a.asset_id} />}
+          </li>
+        ))}</ul>
+      )}
+
+      <h3>Raise issue / request</h3>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <select aria-label="Issue kind" value={issueKind}
+                onChange={(e) => setIssueKind(e.target.value as typeof issueKind)}>
+          <option value="info">info</option>
+          <option value="ack_required">ack required</option>
+          <option value="approval_required">approval required</option>
+        </select>
+        <input aria-label="Issue subject" placeholder="subject"
+               value={issueSubject}
+               onChange={(e) => setIssueSubject(e.target.value)} />
+        <input aria-label="Issue body" placeholder="details (optional)"
+               value={issueBody}
+               onChange={(e) => setIssueBody(e.target.value)} />
+        <button disabled={!issueSubject} onClick={() => act(async () => {
+          await createNotification({ rx_id: rx.id, kind: issueKind,
+                                     subject: issueSubject,
+                                     body: issueBody || undefined });
+          setIssueSubject(""); setIssueBody("");
+        }, "Sent to counterparty inbox")}>Send</button>
+      </div>
+
       <h3>Comments</h3>
       <ul>
         {comments.map((c) => (
-          <li key={c.id}>{c.body} <small>({c.created_at.slice(0, 16)})</small></li>
+          <li key={c.id}>
+            {c.body}
+            {c.file_reference_id && (
+              <small> [attachment {c.file_reference_id.slice(0, 8)}…]</small>
+            )}
+            {" "}<small>({c.created_at.slice(0, 16)})</small>
+          </li>
         ))}
         {comments.length === 0 && <li><em>None</em></li>}
       </ul>
       <div style={{ display: "flex", gap: 8 }}>
         <input name="comment" value={comment} placeholder="Add comment"
                onChange={(e) => setComment(e.target.value)} style={{ flex: 1 }} />
+        {attachments.length > 0 && (
+          <select aria-label="Anchor attachment" value={commentRef}
+                  onChange={(e) => setCommentRef(e.target.value)}>
+            <option value="">no attachment</option>
+            {attachments.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.asset.kind}/{a.asset.jaw} {a.asset.sha256.slice(0, 8)}…
+              </option>
+            ))}
+          </select>
+        )}
         <button onClick={() => act(async () => {
-          await createRxComment(rx.id, comment);
-          setComment("");
+          await createRxCommentEx(rx.id, comment, commentRef || undefined);
+          setComment(""); setCommentRef("");
         }, "Comment added")}>Post</button>
       </div>
 

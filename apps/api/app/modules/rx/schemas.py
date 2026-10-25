@@ -112,6 +112,7 @@ class RxTransitionOut(BaseModel):
 class CommentCreate(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
     parent_id: uuid.UUID | None = None
+    file_reference_id: uuid.UUID | None = None
 
 
 class CommentOut(BaseModel):
@@ -120,9 +121,51 @@ class CommentOut(BaseModel):
     rx_id: uuid.UUID
     author_membership_id: uuid.UUID
     parent_id: uuid.UUID | None
+    file_reference_id: uuid.UUID | None
     body: str
     created_at: datetime
     edited_at: datetime | None
+
+
+class NotificationCreate(BaseModel):
+    rx_id: uuid.UUID
+    kind: str = Field(pattern="^(info|ack_required|approval_required)$")
+    subject: str = Field(min_length=1, max_length=300)
+    body: str | None = Field(default=None, max_length=4000)
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    rx_id: uuid.UUID
+    created_by_org_id: uuid.UUID
+    kind: str
+    subject: str
+    body: str | None
+    rx_version_at_creation: int | None
+    status: str
+    resolved_at: datetime | None
+    created_at: datetime
+
+
+class DecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    # business signature record — required, non-blank
+    signature_name: str = Field(min_length=1, max_length=200)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class ApprovalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    notification_id: uuid.UUID
+    rx_id: uuid.UUID
+    rx_version: int
+    decision: str
+    signature_name: str
+    comment: str | None
+    decided_by_user_id: uuid.UUID
+    decided_at: datetime
 
 
 class CatalogItemOut(BaseModel):

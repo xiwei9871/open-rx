@@ -17,15 +17,16 @@ test.describe("M1 studio", () => {
     await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
     await expect(page.getByText("Profile & defaults")).toBeVisible();
     await expect(page.getByLabel("Timezone")).toHaveValue("UTC");
-    // roster: add a doctor and set default
-    await page.getByLabel("Roster name").fill("Dr Studio");
+    // roster: add a doctor (unique names — dev DB accumulates across runs)
+    const suffix = `${Date.now() % 100000}`;
+    await page.getByLabel("Roster name").fill(`Dr Studio ${suffix}`);
     await page.getByRole("button", { name: "Add roster member" }).click();
-    await expect(page.getByText("Dr Studio (doctor)")).toBeVisible();
+    await expect(page.getByText(`Dr Studio ${suffix} (doctor)`)).toBeVisible();
     // locations
-    await page.getByLabel("New location").fill("Studio Lab Front Desk");
+    await page.getByLabel("New location").fill(`Studio Front Desk ${suffix}`);
     await page.getByRole("button", { name: "Add location" }).click();
     await expect(page.getByRole("listitem")
-      .filter({ hasText: "Studio Lab Front Desk" })).toBeVisible();
+      .filter({ hasText: `Studio Front Desk ${suffix}` })).toBeVisible();
   });
 
   test("rx create: template save/apply + tooth marking", async ({ page }) => {

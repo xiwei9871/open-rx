@@ -583,6 +583,33 @@ paths:
         "403": {$ref: "#/components/responses/Forbidden"}
         "409": {$ref: "#/components/responses/VersionConflict"}
         "422": {$ref: "#/components/responses/IllegalTransition"}
+  /rx/{rxId}/complete:
+    post:
+      tags: [prescriptions]
+      operationId: completeRx
+      summary: "Lab marks the order complete (production done) — M2 LAB-019"
+      x-scope: receiving lab member
+      x-idempotent: "repeat returns current state"
+      x-state-transition: "checked_in -> completed"
+      parameters:
+        - $ref: "#/components/parameters/RxId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: {type: [string, "null"], maxLength: 500}
+      responses:
+        "200":
+          description: "Completed"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Rx"}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/VersionConflict"}
+        "422": {$ref: "#/components/responses/IllegalTransition"}
   /rx/{rxId}/bundle:
     get:
       tags: [prescriptions]
@@ -647,6 +674,17 @@ paths:
         "409": {$ref: "#/components/responses/VersionConflict"}
         "422": {$ref: "#/components/responses/IllegalTransition"}
   /rx/{rxId}/attachments:
+    get:
+      tags: [prescriptions]
+      operationId: listRxAttachments
+      summary: "List live file references on the Rx"
+      x-scope: issuing practice member | receiving lab (visible rx)
+      parameters: [$ref: "#/components/parameters/RxId"]
+      responses:
+        "200":
+          description: "Attachments"
+          content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/FileReference"}}}}}}
+        "403": {$ref: "#/components/responses/Forbidden"}
     post:
       tags: [prescriptions]
       operationId: attachToRx
@@ -851,6 +889,18 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+  /notifications/{notificationId}/read:
+    post:
+      tags: [collaboration]
+      operationId: markNotificationRead
+      summary: "Mark read; ack_required becomes resolved"
+      x-scope: recipient org member
+      parameters: [$ref: "#/components/parameters/NotificationId"]
+      responses:
+        "200":
+          description: "Notification"
+          content: {application/json: {schema: {$ref: "#/components/schemas/Notification"}}}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /notifications/{notificationId}/decision:
     post:
       tags: [collaboration]
