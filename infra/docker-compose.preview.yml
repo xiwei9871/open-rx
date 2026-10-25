@@ -54,8 +54,10 @@ services:
         limits: {memory: 256M, cpus: "0.5"}
 
   rustfs:
-    # Pinned by digest — same verified S3 surface as dev/CI.
-    image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+    # Pinned by digest — same verified S3 surface as dev/CI. On hosts where
+    # docker.io is unreachable, preload the same digest via a mirror and set
+    # RUSTFS_IMAGE to the local tag (digest verified at pull time).
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b}
     restart: unless-stopped
     command: rustfs /data
     environment:
