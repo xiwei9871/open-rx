@@ -70,7 +70,7 @@ test.describe("UAT-RX practice", () => {
       .toContainText(/band_tooth/);
     await page.getByLabel("Option band_tooth").fill("16");
     await page.getByRole("button", { name: "Add item" }).click();
-    await expect(page.getByText(/BND — Molar band \(upper\) — band_tooth=16/))
+    await expect(page.getByText(/BND — Molar band \(Upper arch\) — band_tooth=16/))
       .toBeVisible({ timeout: 15000 });
   });
 
@@ -113,7 +113,7 @@ test.describe("UAT-RX practice", () => {
     // apply to a new Rx, then diverge
     await openRxCreate(page);
     await selectByText(page, "Template", tname);
-    await expect(page.getByText(/HWL — Hawley retainer \(upper\)/))
+    await expect(page.getByText(/HWL — Hawley retainer \(Upper arch\)/))
       .toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "remove" }).click();
     await selectByText(page, "catalog", "Essix splint");
@@ -192,7 +192,7 @@ test.describe("UAT-RX practice", () => {
       .toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/Jun 30, 2030|2030-06-30/).first())
       .toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(/SPL — Essix splint \(upper\)/))
+    await expect(page.getByText(/SPL — Essix splint \(Upper arch\)/))
       .toBeVisible({ timeout: 15000 });
   });
 

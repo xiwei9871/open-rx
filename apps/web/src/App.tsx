@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { listNotifications, login, logout, me, verify2fa, type Me } from "./api";
+import { listNotifications, login, logout, me, orgs, verify2fa,
+         type Me } from "./api";
+import { setDisplayTz } from "./lib";
 import PatientsPage from "./pages/Patients";
 import PatientDetailPage from "./pages/PatientDetail";
 import RxListPage from "./pages/RxList";
@@ -38,6 +40,9 @@ function pathToRoute(path: string): Route | null {
   if (section === "settings") return { name: "settings" };
   return null;
 }
+
+const DEMO = import.meta.env.VITE_DEMO === "1";
+const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? "dev";
 
 const defaultRoute = (u: Me): Route =>
   u.org_kind === "lab" ? { name: "rx" }
@@ -98,8 +103,19 @@ export default function App() {
   async function afterAuth() {
     const m = await me();
     setUser(m);
+    // Display timestamps in the clinic/lab's configured timezone.
+    try {
+      const mine = (await orgs()).find((o) => o.id === m.org_id);
+      setDisplayTz(mine?.timezone);
+    } catch { /* tz display is best-effort */ }
+    // Demo welcome shortcuts: a pre-login choice wins over the URL default.
+    const demoTarget = sessionStorage.getItem("easyrs_demo_target");
+    sessionStorage.removeItem("easyrs_demo_target");
     const fromUrl = pathToRoute(window.location.pathname);
-    navigate(fromUrl ?? defaultRoute(m), true);
+    const demo = demoTarget === "patients" && m.org_kind !== "lab"
+      ? { name: "patients" } as Route
+      : demoTarget ? { name: "rx" } as Route : null;
+    navigate(demo ?? fromUrl ?? defaultRoute(m), true);
   }
 
   async function onLogin(e: React.FormEvent) {
@@ -142,11 +158,39 @@ export default function App() {
   }
 
   if (!user) {
+    const demoEntry = (label: string, target: string, hint: string) => (
+      <button type="button" className="demo-entry"
+        onClick={() => sessionStorage.setItem("easyrs_demo_target", target)}>
+        <strong>{label}</strong><br/><span className="muted">{hint}</span>
+      </button>
+    );
     return (
-      <main className="container" style={{ maxWidth: 420 }}>
-        <h1 className="brand" style={{ fontSize: "1.8rem", margin: "2rem 0 1rem" }}>
+      <main className="container" style={{ maxWidth: 560 }}>
+        <h1 className="brand" style={{ fontSize: "1.8rem", margin: "2rem 0 0.4rem" }}>
           EasyRS
         </h1>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Welcome — explore the complete digital workflow between your
+          dental practice and laboratory.
+        </p>
+        {DEMO && (
+          <div className="card demo-welcome" role="group"
+               aria-label="Demo shortcuts">
+            <p className="demo-banner">Demo Environment — Synthetic Data Only</p>
+            <div className="row">
+              {demoEntry("Try the Practice Workflow", "patients",
+                "Patients → cases → scans → prescriptions")}
+              {demoEntry("Explore the Lab Workflow", "rx",
+                "Inbox → bundle check-in → QC → delivery")}
+              {demoEntry("View a Sample Prescription", "rx",
+                "A completed order with files and history")}
+            </div>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Sign in with your invited demo account; the selected workflow
+              opens automatically.
+            </p>
+          </div>
+        )}
         <div className="card">
         {challenge === null ? (
           <form onSubmit={onLogin}>
@@ -198,6 +242,11 @@ export default function App() {
 
   return (
     <>
+      {DEMO && (
+        <div className="demo-banner" role="status">
+          Demo Environment — Synthetic Data Only · EasyRS Preview {APP_VERSION}
+        </div>
+      )}
       <header className="appbar">
         <span className="brand">EasyRS</span>
         <span className="whoami">

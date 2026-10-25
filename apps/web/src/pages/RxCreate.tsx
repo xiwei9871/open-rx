@@ -5,6 +5,7 @@ import {
   replaceRxItems, searchPatients, type Case, type CatalogItem,
   type Location, type Me, type Patient, type RxTemplate,
 } from "../api";
+import { archLabel } from "../lib";
 
 type ToothOp = { tooth: string; op: string; detail?: string | null };
 type DraftItem = {
@@ -360,9 +361,9 @@ export default function RxCreate({ me, onCreated, onCancel, initialPatientId }: 
               <span>Arch</span>
               <select name="arch" value={arch}
                       onChange={(e) => setArch(e.target.value)}>
-                <option value="upper">Upper</option>
-                <option value="lower">Lower</option>
-                <option value="both">Both</option>
+                <option value="upper">Upper arch</option>
+                <option value="lower">Lower arch</option>
+                <option value="both">Both arches</option>
               </select>
             </label>
           </div>
@@ -388,7 +389,7 @@ export default function RxCreate({ me, onCreated, onCancel, initialPatientId }: 
               const c = catalog.find((x) => x.id === i.appliance_id);
               return (
                 <li key={idx}>
-                  {c ? `${c.code} — ${c.name}` : i.appliance_id} ({i.arch})
+                  {c ? `${c.code} — ${c.name}` : i.appliance_id} ({archLabel(i.arch)})
                   {i.options &&
                     ` — ${Object.entries(i.options)
                         .map(([k, v]) => `${k}=${v}`).join(", ")}`}
