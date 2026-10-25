@@ -121,6 +121,16 @@ skipped=0 做 junit 硬门（REQUIRE_S3=1；rustfs service 常驻）。
   `version=3`），并核对持久化行。
 - API 全量 **114 passed / 6 skipped**；E2E 9 passed；远端 CI 见最终报告。
 
+## CI 覆盖修正（2026-10-24）
+
+- `asset-integration` Job 的强制门扩展为 `test_assets.py +
+  test_rx_s1b1.py + test_rx_finalgate.py`（37 个用例），`REQUIRE_S3=1` +
+  junit `skipped=0/failures=0/errors=0` 硬门。远端 run 40149369445 该
+  Job success ⇒ 患者改名 / 目录改名 / 状态快照三场景在真实
+  PostgreSQL+RustFS 上实际执行并通过（门逻辑：任一 skip/fail 即红）。
+- `api-tests` Job 中 finalgate 的 S3 用例照旧 skip——由上面的专用门
+  兜底执行，不构成覆盖缺口。
+
 ## 未解决/风险
 
 - presigned URL 转发窗口：短期 TTL 缓解；未做一次性令牌（后续阶段）。
