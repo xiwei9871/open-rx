@@ -222,7 +222,7 @@ async def seed_demo(slug: str, practice_name: str, lab_name: str,
         # complete journey (items, signature, history, fulfillment trail).
         if doctor and not (await db.execute(select(Rx).where(
                 Rx.practice_org_id == orgs["practice"].id,
-                Rx.status == "completed"))).scalar_one_or_none():
+                Rx.status == "completed"))).scalars().first():
             hwl = (await db.execute(select(CatalogItem).where(
                 CatalogItem.tenant_id == tenant.id,
                 CatalogItem.code == "HWL"))).scalar_one()
