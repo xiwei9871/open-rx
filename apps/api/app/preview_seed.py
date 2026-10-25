@@ -222,7 +222,7 @@ async def seed_demo(slug: str, practice_name: str, lab_name: str,
         # complete journey (items, signature, history, fulfillment trail).
         if doctor and not (await db.execute(select(Rx).where(
                 Rx.practice_org_id == orgs["practice"].id,
-                Rx.status == "delivered"))).scalar_one_or_none():
+                Rx.status == "completed"))).scalar_one_or_none():
             hwl = (await db.execute(select(CatalogItem).where(
                 CatalogItem.tenant_id == tenant.id,
                 CatalogItem.code == "HWL"))).scalar_one()
@@ -238,7 +238,7 @@ async def seed_demo(slug: str, practice_name: str, lab_name: str,
                 case_id=case.id, lab_org_id=orgs["lab"].id,
                 location_id=orgs["practice"].default_location_id,
                 doctor_id=roster_doc.id if roster_doc else None,
-                due_date=date.today(), status="delivered",
+                due_date=date.today(), status="completed",
                 fulfillment_status="delivered", checked_in_via="download",
                 created_by_user_id=doctor.id, submitted_at=now,
                 submitted_by_user_id=doctor.id, checked_in_at=now,
