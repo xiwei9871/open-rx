@@ -70,4 +70,60 @@ test.describe("auth flow", () => {
     await page.getByRole("button", { name: "Verify" }).click();
     await expect(page.getByText("Dr. Demo")).toBeVisible();
   });
+
+  test("logout clears session + hint cookies; deep link denied; no revive", async ({ page, context }) => {
+    await page.goto("/");
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill(ADMIN.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByText("PA Admin")).toBeVisible();
+
+    // after login: session cookie (HttpOnly) + readable hint marker
+    const both = await context.cookies();
+    const sess = both.find((c) => c.name === "easyrs_session");
+    const hint = both.find((c) => c.name === "easyrs_session_hint");
+    expect(sess, "session cookie missing").toBeTruthy();
+    expect(sess!.httpOnly).toBe(true);
+    expect(hint, "session hint cookie missing").toBeTruthy();
+    expect(hint!.httpOnly).toBe(false);
+
+    // sign out -> the 204 response must carry delete Set-Cookie headers
+    // for BOTH cookies; the jar must actually be empty afterwards.
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    const after = await context.cookies();
+    expect(after.find((c) => c.name === "easyrs_session")).toBeFalsy();
+    expect(after.find((c) => c.name === "easyrs_session_hint")).toBeFalsy();
+
+    // protected deep link is denied — shows login, leaks no patient data
+    await page.goto("/patients");
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByLabel("First name")).toHaveCount(0);
+    // refresh does not revive the revoked session
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
+  test("legacy session without hint cookie degrades to plain login", async ({ page, context }) => {
+    // pre-upgrade browsers hold easyrs_session but no easyrs_session_hint.
+    // Expected behaviour: the app simply shows the login form (no crash
+    // loop, no stuck spinner); signing in again works normally.
+    await page.goto("/");
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill(ADMIN.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByText("PA Admin")).toBeVisible();
+    await context.clearCookies({ name: "easyrs_session_hint" });
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Sign in" }))
+      .toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("PA Admin")).toHaveCount(0);
+
+    // re-login works — no error loop
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill(ADMIN.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByText("PA Admin")).toBeVisible();
+  });
 });

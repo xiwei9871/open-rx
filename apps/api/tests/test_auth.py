@@ -43,6 +43,33 @@ async def test_logout_revokes_session(client):
     assert (await client.get("/v1/auth/me")).status_code == 401
 
 
+async def test_login_sets_session_and_hint_cookies(client):
+    r = await login(client, "staff@pa.dev")
+    cookies = r.headers.get_list("set-cookie")
+    joined = "; ".join(cookies)
+    assert "easyrs_session=" in joined
+    assert "easyrs_session_hint=1" in joined
+    # session must stay HttpOnly; the hint must NOT (JS reads it to gate me())
+    sess = [c for c in cookies if c.startswith("easyrs_session=")][0]
+    hint = [c for c in cookies if c.startswith("easyrs_session_hint=")][0]
+    assert "httponly" in sess.lower()
+    assert "httponly" not in hint.lower()
+
+
+async def test_logout_sends_delete_headers_for_both_cookies(client):
+    await login(client, "staff@pa.dev")
+    r = await client.post("/v1/auth/logout")
+    assert r.status_code == 204
+    cookies = r.headers.get_list("set-cookie")
+    for name in ("easyrs_session", "easyrs_session_hint"):
+        dele = [c for c in cookies
+                if c.startswith(f"{name}=")
+                and ("max-age=0" in c.lower() or "expires=" in c.lower())]
+        assert dele, f"logout did not send a delete Set-Cookie for {name}"
+    # jar emptied: follow-up request carries no cookies
+    assert (await client.get("/v1/auth/me")).status_code == 401
+
+
 async def test_password_change_flow(client):
     await login(client, "staff@pa.dev")
     r = await client.post("/v1/auth/password", json={

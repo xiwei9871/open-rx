@@ -176,15 +176,18 @@ async def verify_2fa(body: TwoFAVerifyRequest, request: Request,
 
 
 @router.post("/auth/logout", status_code=204, operation_id="logout")
-async def logout(request: Request, response: Response, db: Db, me: Me):
+async def logout(request: Request, db: Db, me: Me):
     me.session.revoked_at = datetime.now(UTC)
     record(db, action="logout", object_type="user_account", object_id=me.user.id,
            tenant_id=me.tenant_id, org_id=me.org.id,
            actor_user_id=me.user.id, request=request)
     await db.commit()
-    response.delete_cookie(SESSION_COOKIE)
-    response.delete_cookie(SESSION_HINT_COOKIE)
-    return Response(status_code=204)
+    # A directly-returned Response bypasses the injected `response` param —
+    # delete_cookie must land on this object or no Set-Cookie is emitted.
+    out = Response(status_code=204)
+    out.delete_cookie(SESSION_COOKIE)
+    out.delete_cookie(SESSION_HINT_COOKIE)
+    return out
 
 
 @router.get("/auth/me", response_model=MeOut, operation_id="me")

@@ -261,6 +261,28 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 7
+      # Web product audit — hard gate: any P0/P1 finding exits nonzero.
+      - name: Web audit gate
+        run: |
+          cd apps/web
+          node tests/audit/run-audit.mjs --out audit-evidence
+      # Failure injection: the audit harness must go red when a real
+      # console error exists — proves the gate is not a rubber stamp.
+      - name: Audit gate self-test + failure injection
+        run: |
+          cd apps/web
+          node tests/audit/run-audit.mjs --self-test
+          if AUDIT_INJECT=1 node tests/audit/run-audit.mjs --quick --out audit-inject; then
+            echo "audit gate failed to detect injected console error"; exit 1;
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-audit-evidence
+          path: |
+            apps/web/audit-evidence/
+            apps/web/audit-inject/findings-raw.json
+          retention-days: 14
 
   web-build:
     runs-on: ubuntu-24.04

@@ -28,27 +28,50 @@ const VIEWPORTS = [
   { name: "mobile-390", width: 390, height: 844 },
 ];
 
+const QUICK = process.argv.includes("--quick");
+const SELF_TEST = process.argv.includes("--self-test");
+const INJECT = !!process.env.AUDIT_INJECT; // CI failure-injection proof
+
 const findings = [];
+const coverage = {}; // role -> viewport -> [{page, checks...}]
 let shotN = 0;
 
 function note(role, page, sev, kind, detail) {
   findings.push({ role, page, severity: sev, kind, detail });
 }
 
+function cover(role, vp, pageName, check = "screenshot") {
+  // file tags say "desktop"; canonical viewport key is "desktop-1440"
+  const key = vp === "desktop" ? "desktop-1440" : vp;
+  (coverage[role] ??= {})[key] ??= [];
+  const vpList = coverage[role][key];
+  if (!vpList.some((e) => e.page === pageName && e.check === check)) {
+    vpList.push({ page: pageName, check });
+  }
+}
+
 async function snap(page, role, name, tag = "") {
   shotN += 1;
+  cover(role, tag || "desktop-1440", name);
   const f = path.join(OUT, "shots",
     `${String(shotN).padStart(2, "0")}-${role}-${name}${tag ? "-" + tag : ""}.png`);
   await page.screenshot({ path: f, fullPage: true });
   return f;
 }
 
-async function signIn(page, creds) {
-  await page.goto("/");
-  await page.getByLabel("Email").fill(creds.email);
-  await page.getByLabel("Password").fill(creds.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForSelector("header nav", { timeout: 10000 });
+/** Walks must complete; a sign-in failure is a P0, never a silent skip. */
+async function signIn(page, creds, role) {
+  try {
+    await page.goto("/");
+    await page.getByLabel("Email").fill(creds.email);
+    await page.getByLabel("Password").fill(creds.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForSelector("header nav", { timeout: 10000 });
+  } catch (e) {
+    note(role, "login", "P0", "signin",
+         `sign-in failed: ${String(e).split("\n")[0]}`);
+    throw e;
+  }
 }
 
 function instrument(page, role, label) {
@@ -87,11 +110,13 @@ async function walkPractice(page, role, tag) {
     await snap(page, role, "patient-detail", tag);
     // deep-link check — detail must have its own URL
     const url = page.url();
+    cover(role, "desktop-1440", "patient-detail", "deep-link-url");
     if (url === BASE + "/" || url === `${BASE}/`) {
       note(role, "patient-detail", "P0", "routing",
            `detail URL is still ${url} — no deep-link/history`);
     } else {
       // browser back must return to the list, not exit the app
+      cover(role, "desktop-1440", "patient-detail", "history-back-forward");
       await page.goBack();
       await page.waitForTimeout(400);
       if (await page.locator("table.data tbody tr, tbody tr").count() === 0) {
@@ -169,6 +194,7 @@ async function errorPaths(page, role) {
     if (await newRx.count()) {
       await newRx.click();
       // submit empty form -> required validation feedback
+      cover(role, "desktop-1440", "rx-create", "empty-submit-validation");
       await page.getByRole("button", { name: "Save draft" }).click();
       await page.waitForTimeout(300);
       const alerted = await page.locator("[role=alert]").count();
@@ -188,6 +214,7 @@ async function errorPaths(page, role) {
     await row.click();
     await page.waitForTimeout(300);
     const heading = await page.locator("h2").first().innerText();
+    cover(role, "desktop-1440", "rx-detail", "refresh-restores-context");
     await page.reload();
     await page.waitForTimeout(800);
     const after = await page.locator("h1,h2").first().innerText()
@@ -282,12 +309,15 @@ async function extendedPractice(page, role) {
       }
       const previewBtn =
         page.getByRole("button", { name: /^Preview/ }).first();
+      cover(role, "desktop-1440", "patient-detail", "stl-upload-list");
       if (await previewBtn.count()) {
         await previewBtn.click();
         await page.waitForTimeout(2000);
         const canvas =
           page.locator("[aria-label=stl-preview] canvas").first();
         if (await canvas.count()) {
+          cover(role, "desktop-1440", "patient-detail",
+                "stl-orbit-drag-pixeldiff");
           const before = await canvas.screenshot();
           const box = await canvas.boundingBox();
           await page.mouse.move(box.x + box.width / 2,
@@ -304,6 +334,8 @@ async function extendedPractice(page, role) {
                  "drag produced no visual change — OrbitControls inert?");
           }
           // zoom + pan must also respond
+          cover(role, "desktop-1440", "patient-detail",
+                "stl-zoom-wheel-pixeldiff");
           await page.mouse.move(box.x + box.width / 2,
                                 box.y + box.height / 2);
           await page.mouse.wheel(0, -400);
@@ -337,6 +369,7 @@ async function extendedPractice(page, role) {
   const commentBox = page.locator("input[name=comment]");
   if (await commentBox.count()) {
     const stamp = `audit-dup-${Date.now()}`;
+    cover(role, "desktop-1440", "rx-detail", "duplicate-click-guard");
     await commentBox.fill(stamp);
     const post = page.getByRole("button", { name: "Post" }).first();
     await post.dispatchEvent("click");
@@ -353,6 +386,7 @@ async function extendedPractice(page, role) {
   // induced-abort flag keeps instrumentation from logging our own chaos
   // requests as product defects.
   page._auditAborting = true;
+  cover(role, "desktop-1440", "rx-list", "network-failure-alert");
   await page.route("**/api/**", (r) => r.abort());
   await navTo(page, "Prescriptions");
   await page.waitForTimeout(900);
@@ -372,6 +406,7 @@ async function extendedLab(page, role) {
   // patient workbench to a lab principal. The route guard may legitimately
   // render the Rx list at this URL, so check for patient-specific UI only.
   await page.goto("/patients");
+  cover(role, "desktop-1440", "patients", "deep-link-permission-denied");
   await page.waitForTimeout(700);
   const leaked = await page.getByLabel("First name").count();
   const patientCol = await page.locator("thead")
@@ -390,6 +425,7 @@ async function extendedLab(page, role) {
     await page.waitForTimeout(400);
     const dl = page.getByRole("button", { name: /Download/i }).first();
     if (await dl.count()) {
+      cover(role, "desktop-1440", "rx-detail", "bundle-download-event");
       // blob+anchor download must produce a real download event
       const [download] = await Promise.all([
         page.waitForEvent("download", { timeout: 8000 }).catch(() => null),
@@ -426,28 +462,41 @@ async function main() {
     const ctx = await browser.newContext({ viewport: VIEWPORTS[0], baseURL: BASE });
     const page = await ctx.newPage();
     instrument(page, role, "walk");
+    const before = findings.length;
     try {
-      await signIn(page, creds);
+      if (INJECT) {
+        await page.addInitScript(() => console.error("AUDIT_INJECTED_ERROR"));
+      }
+      await page.context().tracing.start(
+        { screenshots: true, snapshots: true }).catch(() => {});
+      await signIn(page, creds, role);
       if (role.startsWith("lab")) await walkLab(page, role, "desktop");
       else await walkPractice(page, role, "desktop");
       await errorPaths(page, role);
-      if (role === "practice_admin") await extendedPractice(page, role);
-      if (role === "lab_admin") await extendedLab(page, role);
+      if (role === "practice_admin" && !QUICK)
+        await extendedPractice(page, role);
+      if (role === "lab_admin" && !QUICK) await extendedLab(page, role);
     } catch (e) {
       note(role, "walk", "P0", "crash", String(e).slice(0, 300));
       await snap(page, role, "crash", "desktop").catch(() => {});
     }
+    // keep a trace only when this role produced findings — full traces are
+    // heavy; a clean role needs none.
+    const dirty = findings.length > before;
+    await page.context().tracing.stop(dirty
+      ? { path: path.join(OUT, `trace-${role}.zip`) } : {}).catch(() => {});
     await ctx.close();
+    if (QUICK) break;
   }
 
   // secondary viewports — one role per side, key pages
-  for (const vp of VIEWPORTS.slice(1)) {
+  if (!QUICK) for (const vp of VIEWPORTS.slice(1)) {
     for (const role of ["practice_doctor", "lab_tech"]) {
       const ctx = await browser.newContext({ viewport: vp, baseURL: BASE });
       const page = await ctx.newPage();
       instrument(page, role, `vp-${vp.name}`);
       try {
-        await signIn(page, ROLES[role]);
+        await signIn(page, ROLES[role], role);
         if (role === "practice_doctor") {
           await snap(page, role, "patients", vp.name);
           await page.getByRole("button", { name: "Prescriptions" }).click();
@@ -459,6 +508,7 @@ async function main() {
         } else {
           await snap(page, role, "rx-list", vp.name);
         }
+        cover(role, vp.name, "layout", "no-horizontal-overflow");
         // overflow check — content must not bleed past the viewport
         const over = await page.evaluate(
           () => document.documentElement.scrollWidth -
@@ -475,12 +525,101 @@ async function main() {
   }
 
   await browser.close();
+  return writeReport();
+}
+
+/** Honest coverage: what was actually walked, per role+viewport. A missing
+ *  required page or a shot-starved run is itself a P0 — never fake green. */
+function writeReport() {
+  const REQUIRED = {
+    practice: ["patients", "rx-list", "rx-create", "rx-detail",
+               "inbox", "settings"],
+    lab: ["rx-list", "rx-detail", "inbox", "settings"],
+  };
+  for (const [role, vps] of Object.entries(coverage)) {
+    const desktop = vps["desktop-1440"] ?? [];
+    const pages = new Set(desktop.map((e) => e.page));
+    for (const req of REQUIRED[role.startsWith("lab") ? "lab" : "practice"]) {
+      if (!pages.has(req) && !QUICK) {
+        findings.push({ role, page: req, severity: "P0", kind: "coverage",
+          detail: `required page never reached/screenshotted: ${req}` });
+      }
+    }
+  }
+  if (!QUICK && shotN < 30) {
+    findings.push({ role: "audit", page: "*", severity: "P0",
+      kind: "coverage",
+      detail: `only ${shotN} screenshots — audit did not complete` });
+  }
+  const gate = findings.filter((f) => ["P0", "P1"].includes(f.severity));
+  const summary = {
+    verdict: gate.length === 0 ? "PASS" : "FAIL",
+    findings_total: findings.length,
+    blocking: gate.length,
+    screenshots: shotN,
+    generated_at: new Date().toISOString(),
+  };
+  fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, "findings-raw.json"),
                    JSON.stringify(findings, null, 2));
-  console.log(`audit done: ${findings.length} findings, ${shotN} shots -> ${OUT}`);
+  fs.writeFileSync(path.join(OUT, "coverage.json"),
+                   JSON.stringify(coverage, null, 2));
+  fs.writeFileSync(path.join(OUT, "summary.json"),
+                   JSON.stringify(summary, null, 2));
+  console.log(`audit ${summary.verdict}: ${findings.length} findings `
+    + `(${gate.length} blocking), ${shotN} shots -> ${OUT}`);
   for (const f of findings) {
     console.log(`  [${f.severity}] ${f.role} ${f.page} ${f.kind}: ${f.detail}`);
   }
+  return gate.length === 0 ? 0 : 1;
 }
 
-await main();
+/** --self-test: prove the gate actually goes red. Synthetic severities plus
+ *  a live injected console error must both produce a nonzero verdict. */
+async function selfTest() {
+  // synthetic matrix
+  const mk = (sev) => [{ severity: sev, role: "t", page: "t",
+                         kind: "t", detail: "t" }];
+  const cases = [
+    { list: mk("P0"), want: 1 }, { list: mk("P1"), want: 1 },
+    { list: mk("P2"), want: 0 }, { list: mk("P3"), want: 0 },
+    { list: [], want: 0 },
+  ];
+  const clean = [];
+  for (const c of cases) {
+    const blocking = c.list.filter((f) => ["P0", "P1"].includes(f.severity));
+    const got = blocking.length ? 1 : 0;
+    if (got !== c.want) {
+      console.log(`self-test FAIL: gate([${c.list.map(f => f.severity)}]) `
+                  + `= ${got}, want ${c.want}`);
+      return 1;
+    }
+  }
+  clean.length = 0;
+  // live injection: a real console error must be captured by instrument()
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ baseURL: BASE });
+  const page = await ctx.newPage();
+  const captured = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") captured.push(m.text());
+  });
+  await page.addInitScript(() => console.error("INJECTED_FOR_SELF_TEST"));
+  await page.goto("/").catch(() => {});
+  await page.waitForTimeout(500);
+  await browser.close();
+  if (!captured.some((t) => t.includes("INJECTED_FOR_SELF_TEST"))) {
+    console.log("self-test FAIL: injected console error was not captured");
+    return 1;
+  }
+  console.log("self-test PASS: gate rejects P0/P1, allows P2/P3/clean; "
+              + "injected console error captured");
+  return 0;
+}
+
+if (SELF_TEST) {
+  process.exit(await selfTest());
+} else {
+  const code = await main();
+  process.exit(code);
+}

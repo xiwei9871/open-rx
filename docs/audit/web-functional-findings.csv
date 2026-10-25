@@ -1,22 +1,23 @@
-id,severity,page,kind,finding,status,fix_or_disposition,evidence
-F-01,P0,global,routing,"No URL routing — all views at /, no deep links or history",FIXED,"App.tsx URL routes + popstate/pushState","round1 findings-raw; round2 clean"
-F-02,P0,rx-detail,refresh,"Refresh on detail lost context (bare login shell)",FIXED,"route restoration + session probe","round1; ux.spec deep-link test"
-F-03,P1,global,layout,"max-width 720px, no design system, unstyled controls",FIXED,"styles.css design system + app shell","round1 vs round2 shots"
-F-04,P1,rx-create,interaction,"window.prompt() for template name/required options",FIXED,"inline template-name + option fields","ux.spec inline-options test"
-F-04b,P1,org-settings,interaction,"window.prompt() for location rename",FIXED,"inline controlled rename field","code review + round2"
-F-05,P1,rx-list,info-display,"Raw UUIDs for patient/lab/doctor/location",FIXED,"RxOut display fields + UI labels","ux.spec names-not-ids test"
-F-06,P1,stl-preview,interaction,"Auto-rotating mesh, no user orbit/pan/zoom",FIXED,"OrbitControls + reset view","round2 drag/zoom pixel-diff"
-F-07,P1,rx-detail,layout,"Single long unstyled scroll, no grouping",FIXED,"card sections: status/edit/actions/attachments/fulfillment/items/issues/comments/history","round2 shot 05"
-F-08,P1,login,console,"401 console noise for anonymous visitors",FIXED,"session-hint cookie gates me() probe","round2 clean console"
-F-09,P1,rx-detail,download,"window.open after await is popup-blocked in real browsers",FIXED,"saveAs blob+anchor download","round2 download event; rx.spec"
-F-10,P1,global,double-submit,"Mutations re-enterable before disabled re-render",FIXED,"busyRef/useActionLock on all mutations","round2 dblclick -> 1 comment"
-F-11,P2,infra,testability,"Dev rate limits block repeatable browser suites",FIXED,"compose RL_* overrides; prod unchanged","round2 clean run"
-F-12,P2,rx-list,scale,"No pagination/virtualization on large Rx lists",OPEN,"roadmap P2","round2 list shows all rows"
-F-13,P2,global,a11y,"No skip link, limited focus styles, tables partially semantic",OPEN,"roadmap P2","code review"
-F-14,P2,global,search,"No global search across patients/Rx",OPEN,"roadmap P2","feature gap"
-F-15,P2,rx-detail,length,"Detail still long with many attachments/comments",OPEN,"roadmap P2 (tabs/collapse)","round2 shot 05"
-F-16,P2,stl-preview,scale,"No LOD/decimation for large meshes (documented)",OPEN,"roadmap P2","StlPreview comment"
-F-17,P3,global,i18n,"English-only UI",OPEN,"roadmap P3","-"
-F-18,P3,global,theming,"No dark mode/org branding",OPEN,"roadmap P3","-"
-F-19,P3,bundle,performance,"764 kB single JS chunk (vite warning)",OPEN,"roadmap P3 code-splitting","build output"
-F-20,P3,lab,workbench,"No kanban/batch ops for lab queue",OPEN,"roadmap P2","parity matrix"
+id,severity,source,page/component,issue,status
+F-01,P0,audit-auto,App.tsx,no URL routing — state-only navigation broke deep links/history,FIXED
+F-02,P0,audit-auto,App.tsx,detail-page refresh lost state and dropped to login shell,FIXED
+F-03,P1,audit-auto,styles,bare unstyled layout with 720px global cap and no design system,FIXED
+F-04,P1,code-review,RxCreate.tsx,window.prompt() collected template names and required catalog options,FIXED
+F-05,P1,code-review,OrgSettings.tsx,window.prompt() used for location renames,FIXED
+F-06,P1,code-review,RxList.tsx,only Rx-number/status/due columns — no patient or lab identity,FIXED
+F-07,P1,code-review,rx list APIs,list rows showed raw UUIDs; no display fields in RxOut,FIXED
+F-08,P1,code-review,RxDetail.tsx,single ungrouped scroll of fields/actions/comments/issues/history,FIXED
+F-09,P1,code-review,StlPreview.tsx,auto-rotated mesh with no orbit/pan/zoom controls,FIXED
+F-10,P1,code-review,App.tsx,anonymous page loads fired me() and logged 401 console noise,FIXED
+F-11,P1,code-review,RxDetail.tsx + PatientDetail.tsx,window.open() after async fetch — popup-blocked downloads,FIXED
+F-12,P1,code-review,auth/router.py + mutation handlers,logout dropped delete Set-Cookie (fresh Response discarded them) and act()/run() were re-enterable on double-click,FIXED
+F-13,P2,code-review,infra/docker-compose.yml,dev login/write rate limits broke repeatable browser suites,FIXED
+F-14,P2,code-review,RxCreate.tsx,tooth-palette UX still thin vs EasyRx picker,ROADMAP
+F-15,P2,code-review,global,no skip-link / landmark polish beyond basic roles,ROADMAP
+F-16,P2,code-review,RxList.tsx,mobile list could collapse to stacked cards,ROADMAP
+F-17,P2,code-review,RxDetail.tsx,comment→attachment anchor only scrolls,ROADMAP
+F-18,P2,code-review,App.tsx,only prefetching on nav hover,ROADMAP
+F-19,P2,code-review,RxDetail.tsx,approval history exists but no timeline component,ROADMAP
+F-20,P2,code-review,App.tsx,unread badge refreshes only on nav,ROADMAP
+F-21,P2,audit-auto,RxDetail.tsx,posting an empty comment yields a silent disabled-button no-op,ROADMAP
+F-22,P3,code-review,RxCreate.tsx + api.ts,server-side validation errors shown only as text (no field mapping),ROADMAP

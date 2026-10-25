@@ -9,7 +9,7 @@ All screenshots are real Playwright captures at 1440×900 unless marked.
 | | Before | After |
 |---|---|---|
 | Evidence | `round1/01-practice_admin-patients-desktop.png` | `round2/01-practice_admin-patients-desktop.png` |
-| Visible change | Bare `<h1>EasyRS</h1>` + loose buttons, page capped at 720 px | Fixed app bar: brand, signed-in identity (`PA Admin — practice_admin @ Smile Ortho`), active-route nav with unread badge, full-width content area |
+| Visible change | Bare `EasyRS` heading + loose buttons, page capped at 720 px | Fixed app bar: brand, signed-in identity (`PA Admin — practice_admin @ Smile Ortho`), active-route nav with unread badge, full-width content area |
 
 ## Prescriptions list
 
@@ -29,40 +29,33 @@ All screenshots are real Playwright captures at 1440×900 unless marked.
 
 | | Before | After |
 |---|---|---|
-| Evidence | `round1/05-practice_admin-rx-detail-desktop.png` | `round2/05-practice_admin-rx-detail-desktop.png` |
+| Evidence | `round1/13-lab_admin-rx-detail-desktop.png` (practice walk crashed before reaching the detail page — itself part of the P0 routing defect) | `round2/05-practice_admin-rx-detail-desktop.png` |
 | Visible change | one unbroken scroll of raw fields and buttons | grouped cards: status header with pills → draft edit → action bar (submit/unsubmit/check-in/complete/download) → attachments (with Preview) → fulfillment (carrier/tracking/QC) → items → issues → comments (with attachment anchor) → history trail |
 
 ## STL preview
 
 | | Before | After |
 |---|---|---|
-| Evidence | code: `StlPreview.tsx` auto-rotate only | `round2/08-practice_admin-stl-orbited-desktop.png` (post-drag capture) |
+| Evidence | code: `StlPreview.tsx` auto-rotate only (no interactive capture existed) | `round2/08-practice_admin-stl-orbited-desktop.png` (post-drag capture) |
 | Verified behavior | mesh auto-rotated; no user control | OrbitControls: left-drag orbit, right-drag pan, scroll zoom, damping, Reset view; audit verified canvas pixels change on drag and on wheel — interaction is real, not just canvas presence |
-
-## Login page
-
-| | Before | After |
-|---|---|---|
-| Evidence | `round1/` role login shots | `round2/` role login shots |
-| Visible change | console logged a `401` on every anonymous visit | session-hint cookie skips the `/auth/me` probe — console clean in round 2 |
 
 ## Lab workbench
 
 | | Before | After |
 |---|---|---|
-| Evidence | `round1/22-lab_admin-rx-list-desktop.png` | `round2/24-lab_admin-rx-detail-desktop.png`, `round2/27-lab_admin-patients-denied-desktop.png` |
+| Evidence | `round1/12-lab_admin-rx-list-desktop.png` | `round2/24-lab_admin-rx-list-desktop.png`, `round2/25-lab_admin-rx-detail-desktop.png`, `round2/28-lab_admin-patients-denied-desktop.png` |
 | Visible change | UUID-only rows; refresh on a detail dropped to the login shell | `Practice` column names the org, patient label is the Rx-scoped projection; refresh keeps context; `/patients` deep-link denied (screenshot shows the guarded view, no patient UI leaked) |
 
 ## Mobile 390×844
 
 | | Before | After |
 |---|---|---|
-| Evidence | `round1/34…36` mobile set | `round2/36…39` mobile set |
+| Evidence | `round1/28-practice_doctor-patients-mobile-390.png`, `round1/29-practice_doctor-rx-list-mobile-390.png`, `round1/30-practice_doctor-rx-create-mobile-390.png`, `round1/31-lab_tech-rx-list-mobile-390.png` | `round2/37-practice_doctor-patients-mobile-390.png`, `round2/38-practice_doctor-rx-list-mobile-390.png`, `round2/39-practice_doctor-rx-create-mobile-390.png`, `round2/40-lab_tech-rx-list-mobile-390.png` |
 | Visible change | 720px column forced horizontal scroll | nav wraps, forms stack, zero measured `scrollWidth` overflow (`documentElement.scrollWidth − clientWidth ≤ 1px`) |
 
 ## Failure modes (round 2 evidence)
 
-- `round2/08-practice_admin-network-failure-desktop.png` — all API calls
+- `round2/09-practice_admin-network-failure-desktop.png` — all API calls
   aborted via `page.route`; the list shows a `role=alert` error instead of
   a silent blank.
 - Duplicate-click: two `dispatchEvent("click")` on Post produced exactly
