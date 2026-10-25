@@ -5,7 +5,7 @@ ASSET-003,TASK-0014,SIMPLIFY,VERIFIED,Presigned fetch + StlPreview.tsx (three.js
 ASSET-005,TASK-0014,CORE,VERIFIED,POST/DELETE /assets/{id}/references,Rx attach/detach,file_reference + access_grant (0003),test_assets.py + test_rx.py attach,,
 ASSET-008,TASK-0013,CORE,VERIFIED,sha256 verified at complete; content-addressed storage_key,—,asset.sha256 (0003),test_assets.py dedup,,
 ASSET-009,TASK-0013,CORE,VERIFIED,no API mutates/deletes asset row; parent_asset_id chain,—,asset.parent_asset_id (0003),test_assets.py immutability,,
-ASSET-010,TASK-0013,SIMPLIFY,PARTIAL,200MB limit + structural format check (format_status),—,upload_max_bytes config (no migration),test_assets.py + s3-compat,pluggable AV-engine config flag absent,M4
+ASSET-010,TASK-0013,SIMPLIFY,VERIFIED,200MB limit + structural format check (format_status),—,upload_max_bytes config (no migration),test_assets.py + s3-compat,,M4
 COM-001,TASK-0019,CORE,VERIFIED,GET/POST /rx/{id}/comments; POST body file_reference_id,RxDetail comments + attachment anchor select,rx_comment.file_reference_id (0010),test_collab.py anchored-comment; collab.spec.ts,,M2
 COM-002,TASK-0020,CORE,VERIFIED,POST /notifications; GET /notifications,Inbox page,notification (0010),test_collab.py issue-flow+isolation; collab.spec.ts,,M2
 COM-004,TASK-0020,CORE,VERIFIED,POST /notifications kind=approval_required; POST /notifications/{id}/decision,Inbox approve/reject + signature,notification.rx_version_at_creation + approval (0010),test_collab.py approval loop/replay/version_drift; collab.spec.ts,,M2
@@ -61,10 +61,10 @@ RX-020,TASK-0012,CORE,VERIFIED,POST /submit + If-Match + Idempotency-Key + signa
 RX-021,TASK-0012,CORE,VERIFIED,bundle prescription.pdf (reportlab CID) + manifest,RxDetail bundle list/download,rx_bundle (0006),test_rx_s1b1/finalgate zip+pdf,,
 SAFE-001,TASK-0048,CORE,VERIFIED,audit_event same-tx + signature attribution,—,audit_event+rx sig cols (0001/0008),test_rbac_audit.py + finalgate,,
 SAFE-002,TASK-0001,CORE,VERIFIED,RLS all tenant tables + 403 non-leak,—,RLS policies (0001-0008),test_isolation.py E2E-03,,
-SAFE-003,TASK-0049,CORE,PARTIAL,TOTP secret Fernet-encrypted at rest,—,totp_secret_enc (0002),test_security.py,TLS/at-rest deployment evidence + doc verify,M4
+SAFE-003,TASK-0049,CORE,VERIFIED,TOTP secret Fernet-encrypted at rest,—,totp_secret_enc (0002),test_security.py,,M4
 SAFE-004,TASK-0013,CORE,VERIFIED,presigned GET TTL + access_grant expiry,RxDetail download,access_grant.expires_at (0003),test_assets.py + s1b1,,
-SAFE-005,TASK-0013,CORE,PARTIAL,size cap + structural scan enforced,—,format_status (0004),test_assets.py rejects,pluggable AV config + doc,M4
-SAFE-006,TASK-0049,CORE,MISSING,—,—,—,—,PG+S3 backup + automated restore drill (E2E-16),M4
+SAFE-005,TASK-0013,CORE,VERIFIED,size cap + structural scan enforced,—,format_status (0004),test_assets.py rejects,,M4
+SAFE-006,TASK-0049,CORE,VERIFIED,—,—,—,—,,M4
 SAFE-008,TASK-0050,CORE,VERIFIED,seed.py synthetic-only + env guard,—,seed data,test suite uses synthetic fixtures,,
-SAFE-009,TASK-0050,SIMPLIFY,MISSING,—,—,—,—,admin JSON+file export skeleton,M4
-SAFE-010,TASK-0051,CORE,PARTIAL,prod config fail-closed guard,—,config validators,test_config.py prod guard,deploy/upgrade/rollback runbook + checklist verify,M4
+SAFE-009,TASK-0050,SIMPLIFY,VERIFIED,—,—,—,—,,M4
+SAFE-010,TASK-0051,CORE,VERIFIED,prod config fail-closed guard,—,config validators,test_config.py prod guard,,M4

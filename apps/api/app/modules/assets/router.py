@@ -50,6 +50,24 @@ def _validate_stl(content: bytes) -> bool:
     return head == b"solid" and b"facet" in content[:8192]
 
 
+_EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+
+def _av_scan(content: bytes) -> tuple[bool, str]:
+    """ASSET-010 pluggable content scan. Engine selection via
+    `ASSET_AV_ENGINE`: 'none' (structural checks only — default),
+    'eicar_stub' (deterministic test engine; rejects the EICAR marker so CI
+    can exercise the rejection path without a live AV daemon). A production
+    engine (ClamAV etc.) plugs in here — returning (False, reason) rejects
+    the upload and drops the staging object."""
+    engine = get_settings().asset_av_engine
+    if engine == "none":
+        return True, "skipped"
+    if engine == "eicar_stub":
+        return (_EICAR not in content), "eicar_stub"
+    return False, f"unknown av engine {engine!r}"  # fail closed
+
+
 async def _subject_owned(db: AsyncSession, p: Principal,
                          subject_type: str, subject_id: uuid.UUID) -> bool:
     if subject_type == "patient":
@@ -236,6 +254,17 @@ async def complete_upload(session_id: uuid.UUID, body: UploadComplete,
         raise HTTPException(status_code=422, detail={
             "code": "invalid_mesh",
             "message": "file is not a recognizable STL mesh"})
+    clean, engine = _av_scan(content)
+    if not clean:
+        await asyncio.to_thread(
+            s3().delete_object, Bucket=_s.s3_bucket, Key=sess.storage_key)
+        record(db, action="asset.scan_rejected", object_type="upload_session",
+               object_id=sess.id, tenant_id=p.tenant_id, org_id=p.org.id,
+               actor_user_id=p.user.id, request=request,
+               after={"engine": engine})
+        raise HTTPException(status_code=422, detail={
+            "code": "scan_rejected",
+            "message": f"content rejected by scan engine {engine}"})
 
     key = _asset_key(sess.tenant_id, sess.org_id, digest)
     await asyncio.to_thread(

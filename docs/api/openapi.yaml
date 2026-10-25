@@ -1393,6 +1393,16 @@ paths:
       security: []
       responses: {"200": {description: "OK"}}
 
+  /admin/export:
+    get:
+      tags: [admin]
+      operationId: adminExport
+      summary: "Org-scoped administrator export (SAFE-009): org profile, members (no credentials), locations, roster, patients, Rx summary, asset manifest."
+      x-scope: org:manage
+      responses:
+        "200": {description: "JSON export document"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
 components:
   parameters:
     OrgId: {name: orgId, in: path, required: true, schema: {type: string, format: uuid}}

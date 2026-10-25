@@ -40,6 +40,8 @@ REQUIRED_SPEC_OPS = {
     # M3: fulfillment
     "recordRxQc", "shipRx", "receiveRx", "deliverRx", "getRxFulfillment",
     "rxDashboard",
+    # M4: admin export
+    "adminExport",
 }
 EXTRA_AUTH_OPS = {
     "login", "verifyTwoFA", "logout", "me",

@@ -1,6 +1,10 @@
 # EasyRS — 开源正畸处方与技工室生产协同平台
 
-> 独立开发、可自托管的 EasyRx 替代系统。**当前阶段：Stage A — 工程基线与需求冻结**。仓库内尚无可运行应用代码。
+> 独立开发、可自托管的 EasyRx 替代系统。**当前阶段：MVP Alpha（合成数据环境）**。
+> 已实现：患者建档 → Rx 创建/签署提交 → Lab Check-in（含真实 ZIP 交付包）
+> → 通知/版本绑定审批 → 生产完成 → 人工 QC → 发货/收货/交付闭环，
+> 另有机构管理、消息中心、STL 预览、审计、RLS 隔离、备份/恢复演练。
+> 仅供合成数据使用；未获真实医疗生产授权。
 
 ## 这是什么
 
@@ -67,6 +71,9 @@ docker compose -f infra/docker-compose.yml up -d --build
 - [x] 领域模型/状态机/权限矩阵（含 PROVISIONAL 标记）
 - [x] 12 Epic / 51 Task 可追踪 backlog
 - [x] MVP 范围再审（真实闭环，零厂商依赖）
+- [x] 首个可运行迭代（S1b-Core + M1–M3：Rx 全生命周期 + 交付闭环）
+- [x] 备份/恢复演练（scripts/backup.py + restore.py，演练记录见
+      docs/audit/backup-restore-drill.md）
 - [ ] V1.1 实测核验（GAP-* 关闭）
 - [ ] STL PoC 引擎裁决（仅方案已就绪）
-- [ ] 首个可运行迭代
+- [ ] MVP 全量验收（M5，见 docs/planning/mvp-completion-matrix.csv）
