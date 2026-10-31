@@ -52,3 +52,7 @@
 
 - Python ≥3.11（脚本零三方依赖）；Node ≥20（仅文档 lint/工具链用）。
 - 所有验证脚本必须 `python3 tools/…` 一条命令可跑，无需联网。
+
+## 9. Project Continuity (Devin V1.0.1)
+- 会话开始先读 `docs/agent_governance/{PROJECT_STATE.yaml,DECISIONS.md,HANDOFF.md}`，仓库文件优先于聊天记忆。
+- 状态声明前跑 `python3 tools/gov/orx_gates.py all`；未验证一律 NOT_VERIFIED。
