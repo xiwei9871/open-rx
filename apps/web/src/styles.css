@@ -205,3 +205,14 @@ table.kv td:first-child { color: var(--muted); white-space: nowrap; }
   table.data td, table.data th { padding: 0.35rem 0.4rem; }
   .hide-sm { display: none; }
 }
+
+/* Preview demo surface */
+.demo-banner { background: #7a5410; color: #ffe8b8; text-align: center;
+  font-size: .82rem; padding: .35rem .8rem; letter-spacing: .02em; }
+.demo-welcome { border: 1px dashed #b98a2f; }
+.demo-welcome .demo-banner { border-radius: 6px; margin: 0 0 .7rem;
+  font-weight: 600; }
+.demo-entry { flex: 1; min-width: 150px; text-align: left; padding: .7rem .8rem;
+  border: 1px solid var(--line, #d4d9e0); border-radius: 8px; background: #fff;
+  cursor: pointer; }
+.demo-entry:hover { border-color: #3d6ea5; }

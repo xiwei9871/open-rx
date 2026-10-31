@@ -4,7 +4,9 @@ WORKDIR /srv
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ARG PIP_INDEX_URL=""
+RUN pip install --no-cache-dir ${PIP_INDEX_URL:+--index-url "$PIP_INDEX_URL"} \
+    -r requirements.txt
 
 COPY . .
 EXPOSE 8000

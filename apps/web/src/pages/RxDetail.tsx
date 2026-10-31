@@ -10,6 +10,7 @@ import {
 } from "../api";
 import {
   fmtDate, fmtDateTime, fulfillmentLabel, QC_LABELS, saveAs, statusLabel,
+  archLabel,
 } from "../lib";
 import StlPreview from "../components/StlPreview";
 
@@ -227,7 +228,7 @@ export default function RxDetail({ me, rxId, onBack }: {
         <h3>Items</h3>
         <ul>
           {(rx.items ?? []).map((i) => (
-            <li key={i.id}>{itemName(i.appliance_id)} ({i.arch})
+            <li key={i.id}>{itemName(i.appliance_id)} ({archLabel(i.arch)})
               {i.options &&
                 ` — ${Object.entries(i.options)
                     .map(([k, v]) => `${k}=${v}`).join(", ")}`}
@@ -478,7 +479,8 @@ export default function RxDetail({ me, rxId, onBack }: {
         <h3>History</h3>
         <ul>
           {trail.map((t) => (
-            <li key={t.id}>{t.from_status ?? "∅"} → {t.to_status}
+            <li key={t.id}>{t.from_status ? statusLabel(t.from_status) : "Created"}
+              {" → "}{statusLabel(t.to_status)}
               {t.via !== "button" && ` (${t.via})`}
               {t.note && ` — ${t.note}`}
               <small className="muted"> {fmtDateTime(t.created_at)}</small>

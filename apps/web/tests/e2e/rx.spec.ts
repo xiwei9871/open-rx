@@ -38,7 +38,7 @@ test.describe("rx core loop", () => {
     await page.getByLabel("Due date").fill("2030-01-15");
     await selectByText(page, "catalog", "Hawley retainer");
     await page.getByRole("button", { name: "Add" }).click();
-    await expect(page.getByText(/HWL — Hawley retainer \(upper\)/)).toBeVisible();
+    await expect(page.getByText(/HWL — Hawley retainer \(Upper arch\)/)).toBeVisible();
     await page.getByRole("button", { name: "Save draft" }).click();
 
     await expect(page.getByRole("heading", { name: /RX\d+ — Saved/ })).toBeVisible();
@@ -58,7 +58,7 @@ test.describe("rx core loop", () => {
     await expect(page.getByRole("heading", { name: /— Submitted/ })).toBeVisible();
     await page.getByRole("button", { name: "Check in" }).click();
     await expect(page.getByRole("heading", { name: /— Checked-In/ })).toBeVisible();
-    await expect(page.getByText(/submitted → checked_in/)).toBeVisible();
+    await expect(page.getByText(/Submitted → Checked-In/)).toBeVisible();
 
     // practice side: unsubmit is rejected with a clear message
     await page.getByRole("button", { name: "Sign out" }).click();
@@ -103,7 +103,7 @@ test.describe("rx core loop", () => {
     await expect(page.getByRole("heading", { name: /— Checked-In/ })).toBeVisible();
     await expect(page.getByText(/via download/)).toBeVisible();
     // transition trail records the download check-in
-    await expect(page.getByText(/submitted → checked_in/)).toBeVisible();
+    await expect(page.getByText(/Submitted → Checked-In/)).toBeVisible();
   });
 
   test("unsubmit before check-in returns to Saved", async ({ page }) => {

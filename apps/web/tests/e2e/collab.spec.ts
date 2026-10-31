@@ -80,7 +80,7 @@ test.describe("m2 collaboration", () => {
     await page.getByRole("cell", { name: rxNum }).click();
     await page.getByRole("button", { name: "Mark complete" }).click();
     await expect(page.getByRole("heading", { name: /— Completed/ })).toBeVisible();
-    await expect(page.getByText(/checked_in → completed/)).toBeVisible();
+    await expect(page.getByText(/Checked-In → Completed/)).toBeVisible();
   });
 
   test("comments + attachment discussion on an Rx", async ({ page }) => {

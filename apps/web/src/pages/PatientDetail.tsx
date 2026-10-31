@@ -6,6 +6,8 @@ import {
   type Case, type Me, type Patient, type PatientAsset, type Rx,
 } from "../api";
 import StlPreview from "../components/StlPreview";
+
+const DEMO = import.meta.env.VITE_DEMO === "1";
 import { fmtDate, saveAs, statusLabel, useActionLock } from "../lib";
 
 export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx, onNewRx }: {
@@ -200,8 +202,12 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx, 
       {assets.length === 0 ? <p className="empty">No files.</p> : (
         <ul>{assets.map((a) => (
           <li key={a.id}>
-            {a.asset.kind}/{a.asset.jaw} — {a.asset.bytes} bytes —
-            sha256 {a.asset.sha256.slice(0, 16)}… — {a.asset.format_status}
+            {a.asset.kind === "stl" ? "Digital scan" : a.asset.kind}
+            {a.asset.jaw === "upper" ? " — Upper arch"
+              : a.asset.jaw === "lower" ? " — Lower arch" : ""}
+            {" "}· {a.asset.bytes} bytes · SHA-256 {a.asset.sha256.slice(0, 16)}…
+            {" "}· {a.asset.format_status === "format_ok"
+                ? "valid mesh" : "not a valid mesh"}
             {" "}<button type="button" className="small" onClick={() => lock(
               async () => {
                 try {
@@ -228,14 +234,18 @@ export default function PatientDetailPage({ me, patientId, onDeleted, onOpenRx, 
           </li>
         ))}</ul>
       )}
+      {canUpload && DEMO && (
+        <p className="muted">Do not upload real patient records,
+        identifiable scans, or clinical data.</p>
+      )}
       {canUpload && (
         <form onSubmit={onUpload} className="row">
           <input required aria-label="STL file" type="file" accept=".stl"
             ref={fileRef} />
           <select aria-label="Jaw" value={jaw} onChange={(e) => setJaw(e.target.value)}>
             <option value="na">n/a</option>
-            <option value="upper">upper</option>
-            <option value="lower">lower</option>
+            <option value="upper">Upper arch</option>
+            <option value="lower">Lower arch</option>
           </select>
           <button type="submit" disabled={busy}>
             {busy ? "Uploading…" : "Upload STL"}
